@@ -631,3 +631,61 @@ export async function reopenCopy(deliverableId: string, actor: SessionUser): Pro
     deliverableId: d.id,
   });
 }
+
+export async function setProcessStepStatus(
+  stepId: string,
+  done: boolean,
+  actor: SessionUser,
+): Promise<void> {
+  const step = await prisma.processStep.findUnique({
+    where: { id: stepId },
+    include: { deliverable: { select: { department: true } } },
+  });
+  if (!step) throw new GateError("Step not found");
+  requireOwner(actor, step.deliverable.department);
+  await prisma.processStep.update({
+    where: { id: stepId },
+    data: { status: done ? "DONE" : "TODO" },
+  });
+}
+
+export async function saveDeliverableBody(
+  deliverableId: string,
+  body: unknown,
+  actor: SessionUser,
+): Promise<void> {
+  const d = await loadDeliverable(deliverableId);
+  requireOwner(actor, d.department);
+  await prisma.deliverable.update({
+    where: { id: d.id },
+    data: { body: (body ?? undefined) as Prisma.InputJsonValue | undefined },
+  });
+}
+
+export async function addComment(
+  input: { deliverableId?: string; funnelBuildId: string; body: string; isHandoff?: boolean },
+  actor: SessionUser,
+): Promise<void> {
+  if (!input.body.trim()) return;
+  await prisma.$transaction([
+    prisma.comment.create({
+      data: {
+        body: input.body.trim(),
+        isHandoff: input.isHandoff ?? false,
+        authorId: actor.id,
+        deliverableId: input.deliverableId,
+        funnelBuildId: input.funnelBuildId,
+        fromDept: actor.department ?? undefined,
+      },
+    }),
+    prisma.activity.create({
+      data: {
+        type: "COMMENT_ADDED",
+        funnelBuildId: input.funnelBuildId,
+        deliverableId: input.deliverableId,
+        actorId: actor.id,
+        summary: `Commented on ${input.deliverableId ? "a deliverable" : "the build"}`,
+      },
+    }),
+  ]);
+}
