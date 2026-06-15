@@ -23,7 +23,12 @@ export default async function EngagementsPage() {
             <Card key={e.id}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="font-medium text-zinc-900">{e.name}</div>
+                  <Link
+                    href={`/engagements/${e.id}`}
+                    className="font-medium text-zinc-900 hover:underline"
+                  >
+                    {e.name}
+                  </Link>
                   <div className="text-sm text-zinc-500">{e.client.name}</div>
                 </div>
                 <div className="flex items-center gap-2">
