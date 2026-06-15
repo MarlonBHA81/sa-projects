@@ -52,6 +52,7 @@ export default async function BuildPage({
         subtitle={`${build.engagement.client.name} · ${deliveryTypeLabel[build.engagement.deliveryType]} · ${phaseLabel[build.currentPhase]}`}
       >
         <LinkButton href={`/builds/${build.id}/playbook`}>Brand Messaging Playbook</LinkButton>
+        <LinkButton href={`/builds/${build.id}/board`}>Board</LinkButton>
         <LinkButton href={`/builds/${build.id}/leads`}>Leads</LinkButton>
         {user.role === "ADMIN" || user.role === "SALES" ? (
           <form action={syncGhlAction}>
