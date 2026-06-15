@@ -25,6 +25,7 @@ import {
   startTimer,
   stopTimer,
 } from "@/lib/time";
+import { reviewDeliverable } from "@/lib/ai/analyse";
 
 function str(fd: FormData, key: string): string {
   return String(fd.get(key) ?? "");
@@ -57,7 +58,20 @@ export async function submitAction(fd: FormData) {
   const user = await requireUser();
   const buildId = str(fd, "buildId");
   const id = str(fd, "deliverableId");
-  await finish(buildId, id, () => submitDeliverable(id, user));
+  await finish(buildId, id, async () => {
+    await submitDeliverable(id, user);
+    // Best-effort advisory review on submit; never blocks the action.
+    void reviewDeliverable(id, user.id).catch(() => {});
+  });
+}
+
+export async function analyseDeliverableAction(fd: FormData) {
+  const user = await requireUser();
+  const buildId = str(fd, "buildId");
+  const id = str(fd, "deliverableId");
+  await finish(buildId, id, async () => {
+    await reviewDeliverable(id, user.id);
+  });
 }
 
 export async function approveAction(fd: FormData) {

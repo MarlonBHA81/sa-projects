@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth-helpers";
 import { Badge, LinkButton, PageHeader } from "@/components/ui";
 import { formatMinutes } from "@/lib/format";
+import { analyseBuildAction } from "./actions";
 import {
   deliverableStatusClass,
   deliverableStatusLabel,
@@ -14,9 +15,16 @@ import {
   stageStatusLabel,
 } from "@/lib/labels";
 
-export default async function BuildPage({ params }: { params: Promise<{ buildId: string }> }) {
+export default async function BuildPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ buildId: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
   const { buildId } = await params;
-  await requireUser();
+  const { error } = await searchParams;
+  const user = await requireUser();
 
   const build = await prisma.funnelBuild.findUnique({
     where: { id: buildId },
@@ -44,7 +52,21 @@ export default async function BuildPage({ params }: { params: Promise<{ buildId:
         subtitle={`${build.engagement.client.name} · ${deliveryTypeLabel[build.engagement.deliveryType]} · ${phaseLabel[build.currentPhase]}`}
       >
         <LinkButton href={`/builds/${build.id}/playbook`}>Brand Messaging Playbook</LinkButton>
+        {user.role === "ADMIN" ? (
+          <form action={analyseBuildAction}>
+            <input type="hidden" name="buildId" value={build.id} />
+            <button className="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
+              Analyse build
+            </button>
+          </form>
+        ) : null}
       </PageHeader>
+
+      {error ? (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
 
       {paused ? (
         <div className="mb-6 rounded-xl border border-purple-200 bg-purple-50 px-5 py-3 text-sm text-purple-900">

@@ -4,9 +4,16 @@ import { prisma } from "@/lib/db";
 import { requireUser, canActOnDepartment } from "@/lib/auth-helpers";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { formatMinutes, formatDate, formatHours } from "@/lib/format";
-import { deliverableStatusClass, deliverableStatusLabel, departmentLabel } from "@/lib/labels";
+import { aiConfigured } from "@/lib/ai/client";
+import {
+  deliverableStatusClass,
+  deliverableStatusLabel,
+  departmentLabel,
+  aiSeverityClass,
+} from "@/lib/labels";
 import {
   addCommentAction,
+  analyseDeliverableAction,
   addOptionAction,
   approveAction,
   assignAction,
@@ -84,6 +91,13 @@ export default async function DeliverablePage({
           orderBy: { name: "asc" },
         })
       : [];
+
+  const insight = await prisma.aiInsight.findFirst({
+    where: { scope: "DELIVERABLE", scopeId: deliverableId },
+    orderBy: { createdAt: "desc" },
+  });
+  const insightFindings = (insight?.detail as { findings?: string[] } | null)?.findings ?? [];
+  const insightSuggestions = (insight?.suggestions as { text: string }[] | null) ?? [];
   const hidden = (
     <>
       <input type="hidden" name="buildId" value={buildId} />
@@ -184,6 +198,52 @@ export default async function DeliverablePage({
           </form>
         </Card>
       )}
+
+      {/* AI review (advisory) */}
+      <Card className="mb-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-zinc-700">AI review</h3>
+          {aiConfigured() ? (
+            <form action={analyseDeliverableAction}>
+              {hidden}
+              <button className="text-xs text-zinc-600 hover:text-zinc-900">Run AI review</button>
+            </form>
+          ) : null}
+        </div>
+        {!aiConfigured() ? (
+          <p className="mt-2 text-sm text-zinc-500">
+            Add ANTHROPIC_API_KEY to enable advisory AI review.
+          </p>
+        ) : insight ? (
+          <div className="mt-2">
+            <div className="flex items-center gap-2">
+              <Badge className={aiSeverityClass[insight.severity]}>{insight.severity}</Badge>
+              <span className="text-sm font-medium text-zinc-900">{insight.title}</span>
+            </div>
+            <p className="mt-1 text-sm text-zinc-600">{insight.summary}</p>
+            {insightFindings.length ? (
+              <ul className="mt-2 list-disc pl-5 text-sm text-zinc-600">
+                {insightFindings.map((f, i) => (
+                  <li key={i}>{f}</li>
+                ))}
+              </ul>
+            ) : null}
+            {insightSuggestions.length ? (
+              <div className="mt-2 rounded-lg bg-zinc-50 p-3 text-sm text-zinc-700">
+                <div className="mb-1 text-xs font-semibold text-zinc-500">Suggested</div>
+                <ul className="list-disc pl-5">
+                  {insightSuggestions.map((s, i) => (
+                    <li key={i}>{s.text}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <p className="mt-2 text-xs text-zinc-400">Advisory only. It does not change the gate.</p>
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-zinc-500">No AI review yet. It runs on submit, or run it now.</p>
+        )}
+      </Card>
 
       {/* Process */}
       <Card className="mb-6">

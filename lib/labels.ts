@@ -5,6 +5,9 @@ import type {
   DeliveryType,
   EngagementStatus,
   BrsPhase,
+  AiSeverity,
+  AiScope,
+  AiInsightStatus,
 } from "@prisma/client";
 
 export const deliverableStatusLabel: Record<DeliverableStatus, string> = {
@@ -70,4 +73,25 @@ export const phaseLabel: Record<BrsPhase, string> = {
   DIFFERENTIATE: "Differentiate",
   INTEGRATE: "Integrate",
   ACTIVATE: "Activate",
+};
+
+export const aiSeverityClass: Record<AiSeverity, string> = {
+  INFO: "bg-zinc-100 text-zinc-600",
+  LOW: "bg-blue-100 text-blue-700",
+  MEDIUM: "bg-amber-100 text-amber-800",
+  HIGH: "bg-red-100 text-red-700",
+};
+
+export const aiScopeLabel: Record<AiScope, string> = {
+  DELIVERABLE: "Deliverable",
+  STAGE: "Stage",
+  BUILD: "Build",
+  PORTFOLIO: "Portfolio",
+};
+
+export const aiInsightStatusLabel: Record<AiInsightStatus, string> = {
+  NEW: "New",
+  ACKNOWLEDGED: "Acknowledged",
+  APPLIED: "Applied",
+  DISMISSED: "Dismissed",
 };
