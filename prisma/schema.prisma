@@ -1,0 +1,738 @@
+// Story Advantage BRS funnel tool — data model.
+// The schema encodes the Brand Resonance System: engagements (DIY/DWY/DFY),
+// funnel builds, staged deliverables-as-tasks with buildable processes and
+// verification checklists, the gate engine, time tracking, financials, and the
+// advisory AI layer. See /root/.claude/plans for the full plan.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  STRATEGY
+  COPY
+  DESIGN
+  DEV
+  SALES
+}
+
+enum Department {
+  STRATEGY
+  COPY
+  DESIGN
+  DEV
+  SALES
+}
+
+enum BrsPhase {
+  DIFFERENTIATE
+  INTEGRATE
+  ACTIVATE
+}
+
+enum StageStatus {
+  LOCKED
+  IN_PROGRESS
+  IN_REVIEW
+  APPROVED
+  PAUSED
+}
+
+enum DeliverableStatus {
+  BLOCKED
+  NOT_STARTED
+  IN_PROGRESS
+  SUBMITTED
+  CHANGES_NEEDED
+  APPROVED
+  PAUSED
+}
+
+enum DeliverableKind {
+  STANDARD
+  OPTIONS_REQUIRED
+  PLAYBOOK
+}
+
+enum ChecklistItemKind {
+  MANUAL
+  GRUNT_TEST
+  VOICE
+  AI
+}
+
+enum ProcessStepStatus {
+  TODO
+  DONE
+}
+
+enum ApprovalDecision {
+  APPROVED
+  CHANGES_NEEDED
+}
+
+enum GruntTestResult {
+  PASS
+  FAIL
+  NOT_TESTED
+}
+
+enum ConversionGoal {
+  BOOK_A_CALL
+  BUY
+  REGISTER
+}
+
+enum DeliveryType {
+  DIY
+  DWY
+  DFY
+}
+
+enum EngagementStatus {
+  LEAD
+  PROPOSED
+  WON
+  ACTIVE
+  COMPLETED
+  LOST
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ActivityType {
+  PROJECT_CREATED
+  DELIVERABLE_STARTED
+  DELIVERABLE_SUBMITTED
+  DELIVERABLE_APPROVED
+  DELIVERABLE_CHANGES_NEEDED
+  OPTION_ADDED
+  OPTION_SELECTED
+  STAGE_GATE_CLEARED
+  COPY_CHANGED_RESYNC
+  GRUNT_TEST_RECORDED
+  CHECKLIST_ITEM_CHECKED
+  COMMENT_ADDED
+  PLAYBOOK_UPDATED
+  TIMER_STARTED
+  TIMER_STOPPED
+  TIME_LOGGED
+  DELIVERABLE_ASSIGNED
+  DUE_DATE_SET
+  GHL_SYNCED
+  LEAD_IMPORTED
+  LEAD_PUSHED
+  MILESTONE_PUSHED
+  SLACK_NOTIFIED
+  AI_INSIGHT_CREATED
+  AI_INSIGHT_RESOLVED
+  ENGAGEMENT_COMPLETED
+  PNL_GENERATED
+}
+
+enum AiScope {
+  DELIVERABLE
+  STAGE
+  BUILD
+  PORTFOLIO
+}
+
+enum AiInsightType {
+  GRUNT_TEST
+  VOICE
+  SB7_ALIGNMENT
+  BOTTLENECK
+  SLIPPAGE
+  TREND
+  PROCESS_SUGGESTION
+}
+
+enum AiSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum AiInsightStatus {
+  NEW
+  ACKNOWLEDGED
+  APPLIED
+  DISMISSED
+}
+
+// ---------------------------------------------------------------------------
+// Auth.js v5 models + User
+// ---------------------------------------------------------------------------
+
+model User {
+  id                  String      @id @default(cuid())
+  name                String?
+  email               String      @unique
+  emailVerified       DateTime?
+  image               String?
+  passwordHash        String
+  role                Role
+  department          Department?
+  weeklyCapacityHours Int?
+  costRatePerHour     Decimal?    @db.Decimal(10, 2)
+  billable            Boolean     @default(true)
+
+  accounts             Account[]
+  sessions             Session[]
+  assignedDeliverables Deliverable[]
+  processSteps         ProcessStep[]
+  checkedItems         ChecklistItem[]
+  timeEntries          TimeEntry[]
+  comments             Comment[]
+  approvals            Approval[]
+  activities           Activity[]
+  resolvedInsights     AiInsight[]
+  aiUsage              AiUsageLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ---------------------------------------------------------------------------
+// Commercial: clients, engagements, financials
+// ---------------------------------------------------------------------------
+
+model Client {
+  id          String       @id @default(cuid())
+  name        String
+  industry    String?
+  notes       String?
+  engagements Engagement[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([name])
+}
+
+model Engagement {
+  id           String           @id @default(cuid())
+  client       Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId     String
+  name         String
+  deliveryType DeliveryType
+  status       EngagementStatus @default(ACTIVE)
+  listPrice    Decimal?         @db.Decimal(12, 2)
+  price        Decimal?         @db.Decimal(12, 2)
+  currency     String           @default("ZAR")
+  startDate    DateTime?
+  endDate      DateTime?
+  completedAt  DateTime?
+
+  funnelBuilds FunnelBuild[]
+  payments     Payment[]
+  costs        EngagementCost[]
+  pnl          PnLStatement?
+  activities   Activity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([status])
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  engagement   Engagement    @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  engagementId String
+  amount       Decimal       @db.Decimal(12, 2)
+  currency     String        @default("ZAR")
+  status       PaymentStatus @default(PAID)
+  paidAt       DateTime?
+  ghlRef       String?       @unique
+  createdAt    DateTime      @default(now())
+
+  @@index([engagementId])
+}
+
+model EngagementCost {
+  id           String     @id @default(cuid())
+  engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  engagementId String
+  label        String
+  category     String?
+  amount       Decimal    @db.Decimal(12, 2)
+  createdAt    DateTime   @default(now())
+
+  @@index([engagementId])
+}
+
+model PnLStatement {
+  id           String     @id @default(cuid())
+  engagement   Engagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  engagementId String     @unique
+  revenueTotal Decimal    @db.Decimal(12, 2)
+  deliveryCost Decimal    @db.Decimal(12, 2)
+  adSpend      Decimal    @db.Decimal(12, 2)
+  otherCosts   Decimal    @db.Decimal(12, 2)
+  grossProfit  Decimal    @db.Decimal(12, 2)
+  marginPct    Float
+  lines        Json
+  summary      String?
+  generatedAt  DateTime   @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// The work: funnel builds, stages, deliverables (tasks)
+// ---------------------------------------------------------------------------
+
+model FunnelBuild {
+  id              String          @id @default(cuid())
+  engagement      Engagement      @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  engagementId    String
+  name            String
+  conversionGoal  ConversionGoal?
+  audienceSegment String?
+  currentPhase    BrsPhase        @default(DIFFERENTIATE)
+  templateKey     String          @default("brs-standard-v1")
+  ghlLocationId   String?
+  ghlLastSyncedAt DateTime?
+
+  stages        Stage[]
+  deliverables  Deliverable[]
+  brandPlaybook BrandPlaybook?
+  comments      Comment[]
+  activities    Activity[]
+  channels      RevenueChannel[]
+  leads         Lead[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([engagementId])
+}
+
+model Stage {
+  id            String      @id @default(cuid())
+  funnelBuild   FunnelBuild @relation(fields: [funnelBuildId], references: [id], onDelete: Cascade)
+  funnelBuildId String
+  order         Int
+  key           String
+  title         String
+  phase         BrsPhase
+  status        StageStatus @default(LOCKED)
+  approvedAt    DateTime?
+
+  deliverables Deliverable[]
+  snapshots    BurndownSnapshot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([funnelBuildId, order])
+  @@unique([funnelBuildId, key])
+  @@index([funnelBuildId, status])
+}
+
+model Deliverable {
+  id                String            @id @default(cuid())
+  funnelBuild       FunnelBuild       @relation(fields: [funnelBuildId], references: [id], onDelete: Cascade)
+  funnelBuildId     String
+  stage             Stage             @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  stageId           String
+  key               String
+  title             String
+  description       String?
+  department        Department
+  kind              DeliverableKind   @default(STANDARD)
+  status            DeliverableStatus @default(BLOCKED)
+  order             Int
+  isCopy            Boolean           @default(false)
+  requiresGruntTest Boolean           @default(false)
+  body              Json?
+  estimateMinutes   Int?
+  dueDate           DateTime?
+  startedAt         DateTime?
+  approvedAt        DateTime?
+  assignee          User?             @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  assigneeId        String?
+
+  dependsOn      DeliverableDependency[] @relation("Dependent")
+  dependedOnBy   DeliverableDependency[] @relation("Prerequisite")
+  processSteps   ProcessStep[]
+  checklistItems ChecklistItem[]
+  optionSet      OptionSet?
+  approvals      Approval[]
+  gruntTests     GruntTestCheck[]
+  comments       Comment[]
+  activities     Activity[]
+  timeEntries    TimeEntry[]
+  brandPlaybook  BrandPlaybook?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([funnelBuildId, key])
+  @@index([stageId, status])
+  @@index([funnelBuildId, isCopy, status])
+  @@index([department, status])
+  @@index([assigneeId])
+}
+
+model DeliverableDependency {
+  id             String      @id @default(cuid())
+  dependent      Deliverable @relation("Dependent", fields: [dependentId], references: [id], onDelete: Cascade)
+  dependentId    String
+  prerequisite   Deliverable @relation("Prerequisite", fields: [prerequisiteId], references: [id], onDelete: Cascade)
+  prerequisiteId String
+
+  @@unique([dependentId, prerequisiteId])
+  @@index([prerequisiteId])
+}
+
+model ProcessStep {
+  id              String            @id @default(cuid())
+  deliverable     Deliverable       @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  deliverableId   String
+  order           Int
+  title           String
+  description     String?
+  estimateMinutes Int?
+  status          ProcessStepStatus @default(TODO)
+  assignee        User?             @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  assigneeId      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([deliverableId, order])
+}
+
+model ChecklistItem {
+  id            String            @id @default(cuid())
+  deliverable   Deliverable       @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  deliverableId String
+  order         Int
+  label         String
+  kind          ChecklistItemKind @default(MANUAL)
+  required      Boolean           @default(true)
+  checked       Boolean           @default(false)
+  checkedBy     User?             @relation(fields: [checkedById], references: [id], onDelete: SetNull)
+  checkedById   String?
+  checkedAt     DateTime?
+  note          String?
+  gruntTest     GruntTestCheck?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([deliverableId, order])
+}
+
+model GruntTestCheck {
+  id              String          @id @default(cuid())
+  deliverable     Deliverable     @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  deliverableId   String
+  checklistItem   ChecklistItem?  @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
+  checklistItemId String?         @unique
+  option          Option?         @relation(fields: [optionId], references: [id], onDelete: SetNull)
+  optionId        String?
+  passWhatOffered Boolean         @default(false)
+  passHowItHelps  Boolean         @default(false)
+  passWhatToDo    Boolean         @default(false)
+  result          GruntTestResult @default(NOT_TESTED)
+  testedText      String
+  note            String?
+  testedById      String?
+  createdAt       DateTime        @default(now())
+
+  @@index([deliverableId, createdAt])
+}
+
+model OptionSet {
+  id               String      @id @default(cuid())
+  deliverable      Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  deliverableId    String      @unique
+  prompt           String
+  minOptions       Int         @default(2)
+  maxOptions       Int         @default(3)
+  options          Option[]    @relation("SetOptions")
+  selectedOption   Option?     @relation("SelectedOption", fields: [selectedOptionId], references: [id], onDelete: SetNull)
+  selectedOptionId String?     @unique
+  selectedAt       DateTime?
+  selectedById     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Option {
+  id          String           @id @default(cuid())
+  optionSet   OptionSet        @relation("SetOptions", fields: [optionSetId], references: [id], onDelete: Cascade)
+  optionSetId String
+  label       String
+  content     Json
+  rationale   String?
+  selectedFor OptionSet?       @relation("SelectedOption")
+  gruntTests  GruntTestCheck[]
+
+  createdAt DateTime @default(now())
+
+  @@index([optionSetId])
+}
+
+model Approval {
+  id            String           @id @default(cuid())
+  deliverable   Deliverable      @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  deliverableId String
+  approver      User             @relation(fields: [approverId], references: [id])
+  approverId    String
+  decision      ApprovalDecision
+  note          String?
+  createdAt     DateTime         @default(now())
+
+  @@index([deliverableId, createdAt])
+}
+
+model BrandPlaybook {
+  id            String      @id @default(cuid())
+  funnelBuild   FunnelBuild @relation(fields: [funnelBuildId], references: [id], onDelete: Cascade)
+  funnelBuildId String      @unique
+  deliverable   Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  deliverableId String      @unique
+  brandMessage  String?
+  oneLiner      String?
+  tagline       String?
+  bios          Json?
+  salesPitch    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Comment {
+  id            String       @id @default(cuid())
+  body          String
+  isHandoff     Boolean      @default(false)
+  author        User         @relation(fields: [authorId], references: [id])
+  authorId      String
+  deliverable   Deliverable? @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  deliverableId String?
+  funnelBuild   FunnelBuild? @relation(fields: [funnelBuildId], references: [id], onDelete: Cascade)
+  funnelBuildId String?
+  fromDept      Department?
+  toDept        Department?
+  createdAt     DateTime     @default(now())
+
+  @@index([deliverableId, createdAt])
+  @@index([funnelBuildId, createdAt])
+}
+
+model Activity {
+  id            String       @id @default(cuid())
+  type          ActivityType
+  engagement    Engagement?  @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  engagementId  String?
+  funnelBuild   FunnelBuild? @relation(fields: [funnelBuildId], references: [id], onDelete: Cascade)
+  funnelBuildId String?
+  deliverable   Deliverable? @relation(fields: [deliverableId], references: [id], onDelete: SetNull)
+  deliverableId String?
+  actor         User         @relation(fields: [actorId], references: [id])
+  actorId       String
+  summary       String
+  meta          Json?
+  createdAt     DateTime     @default(now())
+
+  @@index([funnelBuildId, createdAt])
+  @@index([engagementId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Time tracking, capacity, burn-down
+// ---------------------------------------------------------------------------
+
+model TimeEntry {
+  id              String      @id @default(cuid())
+  deliverable     Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  deliverableId   String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  startedAt       DateTime    @default(now())
+  endedAt         DateTime?
+  durationMinutes Int?
+  note            String?
+  isRunning       Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+
+  @@index([deliverableId])
+  @@index([userId, isRunning])
+}
+
+model BurndownSnapshot {
+  id                       String   @id @default(cuid())
+  stage                    Stage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  stageId                  String
+  date                     DateTime @default(now())
+  remainingEstimateMinutes Int      @default(0)
+  openCount                Int      @default(0)
+  approvedCount            Int      @default(0)
+
+  @@index([stageId, date])
+}
+
+// ---------------------------------------------------------------------------
+// Optimise / close the loop: revenue, leads, GHL
+// ---------------------------------------------------------------------------
+
+model RevenueChannel {
+  id            String      @id @default(cuid())
+  funnelBuild   FunnelBuild @relation(fields: [funnelBuildId], references: [id], onDelete: Cascade)
+  funnelBuildId String
+  name          String
+  leadsCount    Int         @default(0)
+  spend         Decimal     @default(0) @db.Decimal(12, 2)
+  revenue       Decimal     @default(0) @db.Decimal(12, 2)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([funnelBuildId])
+}
+
+model Lead {
+  id            String      @id @default(cuid())
+  funnelBuild   FunnelBuild @relation(fields: [funnelBuildId], references: [id], onDelete: Cascade)
+  funnelBuildId String
+  ghlContactId  String
+  name          String?
+  email         String?
+  phone         String?
+  source        String?
+  status        String?
+  value         Decimal?    @db.Decimal(12, 2)
+  ghlCreatedAt  DateTime?
+  syncedAt      DateTime    @default(now())
+
+  @@unique([funnelBuildId, ghlContactId])
+  @@index([funnelBuildId])
+}
+
+model GhlConnection {
+  id            String    @id @default(cuid())
+  funnelBuildId String    @unique
+  locationId    String
+  tokenRef      String?
+  lastSyncedAt  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Reusable processes (bottled winning formulas)
+// ---------------------------------------------------------------------------
+
+model ProcessTemplate {
+  id          String      @id @default(cuid())
+  name        String
+  description String?
+  department  Department?
+  steps       Json
+  checklist   Json
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([name])
+}
+
+// ---------------------------------------------------------------------------
+// Advisory AI layer
+// ---------------------------------------------------------------------------
+
+model AiInsight {
+  id              String          @id @default(cuid())
+  scope           AiScope
+  scopeId         String
+  type            AiInsightType
+  severity        AiSeverity      @default(INFO)
+  title           String
+  summary         String
+  detail          Json?
+  suggestions     Json?
+  status          AiInsightStatus @default(NEW)
+  modelUsed       String?
+  inputTokens     Int?
+  outputTokens    Int?
+  cacheReadTokens Int?
+  costUsd         Decimal?        @db.Decimal(10, 4)
+  resolvedBy      User?           @relation(fields: [resolvedById], references: [id], onDelete: SetNull)
+  resolvedById    String?
+  resolvedAt      DateTime?
+  createdAt       DateTime        @default(now())
+
+  @@index([scope, scopeId])
+  @@index([status, severity])
+}
+
+model AiUsageLog {
+  id               String   @id @default(cuid())
+  operation        String
+  model            String
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cacheReadTokens  Int      @default(0)
+  cacheWriteTokens Int      @default(0)
+  costUsd          Decimal  @default(0) @db.Decimal(10, 4)
+  user             User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId           String?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+}
