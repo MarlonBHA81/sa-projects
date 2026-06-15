@@ -10,8 +10,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Used by `prisma migrate`/introspection. On Vercel Postgres, point this at
+  // the non-pooling connection while DATABASE_URL uses the pooled one.
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 // ---------------------------------------------------------------------------

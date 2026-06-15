@@ -15,6 +15,7 @@
     "db:reset": "prisma migrate reset",
     "db:generate": "prisma generate",
     "db:seed": "prisma db seed",
+    "db:create-admin": "tsx scripts/create-admin.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
     "vercel-build": "prisma generate && prisma migrate deploy && next build"
