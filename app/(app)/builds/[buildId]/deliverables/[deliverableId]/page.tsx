@@ -3,20 +3,26 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireUser, canActOnDepartment } from "@/lib/auth-helpers";
 import { Badge, Card, PageHeader } from "@/components/ui";
-import { formatMinutes, formatDate } from "@/lib/format";
+import { formatMinutes, formatDate, formatHours } from "@/lib/format";
 import { deliverableStatusClass, deliverableStatusLabel, departmentLabel } from "@/lib/labels";
 import {
   addCommentAction,
   addOptionAction,
   approveAction,
+  assignAction,
+  logTimeAction,
   recordGruntTestAction,
   reopenCopyAction,
   requestChangesAction,
   saveBodyAction,
   selectOptionAction,
   setChecklistAction,
+  setDueDateAction,
+  setEstimateAction,
   setStepAction,
   startAction,
+  startTimerAction,
+  stopTimerAction,
   submitAction,
 } from "./actions";
 
@@ -49,12 +55,35 @@ export default async function DeliverablePage({
       optionSet: { include: { options: { orderBy: { createdAt: "asc" } } } },
       comments: { orderBy: { createdAt: "desc" }, include: { author: { select: { name: true } } }, take: 20 },
       brandPlaybook: { select: { id: true } },
+      timeEntries: {
+        orderBy: { createdAt: "desc" },
+        take: 8,
+        include: { user: { select: { name: true } } },
+      },
     },
   });
   if (!d || d.funnelBuildId !== buildId) notFound();
 
   const isOwner = canActOnDepartment(user, d.department);
   const isAdmin = user.role === "ADMIN";
+
+  const loggedAgg = await prisma.timeEntry.aggregate({
+    where: { deliverableId },
+    _sum: { durationMinutes: true },
+  });
+  const loggedMinutes = loggedAgg._sum.durationMinutes ?? 0;
+  const running = await prisma.timeEntry.findFirst({
+    where: { userId: user.id, isRunning: true },
+    select: { id: true, deliverableId: true },
+  });
+  const deptUsers =
+    isOwner || isAdmin
+      ? await prisma.user.findMany({
+          where: { OR: [{ department: d.department }, { role: "ADMIN" }] },
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        })
+      : [];
   const hidden = (
     <>
       <input type="hidden" name="buildId" value={buildId} />
@@ -293,6 +322,100 @@ export default async function DeliverablePage({
           ) : null}
         </Card>
       ) : null}
+
+      {/* Time and planning */}
+      <Card className="mb-6">
+        <h3 className="mb-3 text-sm font-semibold text-zinc-700">Time and planning</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          {running?.deliverableId === d.id ? (
+            <form action={stopTimerAction}>
+              {hidden}
+              <button className={primary}>Stop timer</button>
+            </form>
+          ) : isOwner ? (
+            <form action={startTimerAction}>
+              {hidden}
+              <button className={secondary}>Start timer</button>
+            </form>
+          ) : null}
+          {running && running.deliverableId !== d.id ? (
+            <span className="text-xs text-amber-700">A timer is running on another task.</span>
+          ) : null}
+          {isOwner ? (
+            <form action={logTimeAction} className="flex items-center gap-2">
+              {hidden}
+              <input
+                name="minutes"
+                type="number"
+                min="1"
+                placeholder="mins"
+                className="w-20 rounded-lg border border-zinc-300 px-2 py-1.5 text-sm"
+              />
+              <button className={secondary}>Log time</button>
+            </form>
+          ) : null}
+          <span className="text-sm text-zinc-500">
+            Logged {formatHours(loggedMinutes)} · est {formatMinutes(d.estimateMinutes)}
+          </span>
+        </div>
+
+        {isOwner || isAdmin ? (
+          <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-zinc-100 pt-3">
+            <form action={setEstimateAction} className="flex items-center gap-1">
+              {hidden}
+              <label className="text-xs text-zinc-500">Estimate</label>
+              <input
+                name="minutes"
+                type="number"
+                min="0"
+                defaultValue={d.estimateMinutes ?? ""}
+                className="w-20 rounded-lg border border-zinc-300 px-2 py-1 text-sm"
+              />
+              <button className="text-xs text-zinc-600 hover:text-zinc-900">Save</button>
+            </form>
+            <form action={setDueDateAction} className="flex items-center gap-1">
+              {hidden}
+              <label className="text-xs text-zinc-500">Due</label>
+              <input
+                name="due"
+                type="date"
+                defaultValue={d.dueDate ? d.dueDate.toISOString().slice(0, 10) : ""}
+                className="rounded-lg border border-zinc-300 px-2 py-1 text-sm"
+              />
+              <button className="text-xs text-zinc-600 hover:text-zinc-900">Save</button>
+            </form>
+            <form action={assignAction} className="flex items-center gap-1">
+              {hidden}
+              <label className="text-xs text-zinc-500">Assignee</label>
+              <select
+                name="assigneeId"
+                defaultValue={d.assigneeId ?? ""}
+                className="rounded-lg border border-zinc-300 px-2 py-1 text-sm"
+              >
+                <option value="">Unassigned</option>
+                {deptUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+              <button className="text-xs text-zinc-600 hover:text-zinc-900">Save</button>
+            </form>
+          </div>
+        ) : null}
+
+        {d.timeEntries.length ? (
+          <ul className="mt-3 flex flex-col gap-1 border-t border-zinc-100 pt-3 text-xs text-zinc-500">
+            {d.timeEntries.map((t) => (
+              <li key={t.id}>
+                {t.user.name}: {t.isRunning ? "running…" : `${t.durationMinutes ?? 0}m`} ·{" "}
+                {formatDate(t.createdAt)}
+                {t.note ? ` · ${t.note}` : ""}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </Card>
 
       {/* Comments / handoff notes */}
       <Card>

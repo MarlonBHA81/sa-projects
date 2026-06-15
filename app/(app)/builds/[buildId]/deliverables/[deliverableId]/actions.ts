@@ -17,6 +17,14 @@ import {
   startDeliverable,
   submitDeliverable,
 } from "@/lib/deliverable-service";
+import {
+  assignDeliverable,
+  logTime,
+  setDueDate,
+  setEstimateMinutes,
+  startTimer,
+  stopTimer,
+} from "@/lib/time";
 
 function str(fd: FormData, key: string): string {
   return String(fd.get(key) ?? "");
@@ -150,4 +158,50 @@ export async function addCommentAction(fd: FormData) {
       user,
     ),
   );
+}
+
+export async function startTimerAction(fd: FormData) {
+  const user = await requireUser();
+  const buildId = str(fd, "buildId");
+  const id = str(fd, "deliverableId");
+  await finish(buildId, id, () => startTimer(id, user));
+}
+
+export async function stopTimerAction(fd: FormData) {
+  const user = await requireUser();
+  const buildId = str(fd, "buildId");
+  const id = str(fd, "deliverableId");
+  await finish(buildId, id, () => stopTimer(user));
+}
+
+export async function logTimeAction(fd: FormData) {
+  const user = await requireUser();
+  const buildId = str(fd, "buildId");
+  const id = str(fd, "deliverableId");
+  const minutes = Number(str(fd, "minutes"));
+  await finish(buildId, id, () => logTime(id, minutes, str(fd, "note") || undefined, user));
+}
+
+export async function setEstimateAction(fd: FormData) {
+  const user = await requireUser();
+  const buildId = str(fd, "buildId");
+  const id = str(fd, "deliverableId");
+  const minutes = Number(str(fd, "minutes"));
+  await finish(buildId, id, () => setEstimateMinutes(id, Number.isFinite(minutes) ? minutes : null, user));
+}
+
+export async function setDueDateAction(fd: FormData) {
+  const user = await requireUser();
+  const buildId = str(fd, "buildId");
+  const id = str(fd, "deliverableId");
+  const value = str(fd, "due");
+  await finish(buildId, id, () => setDueDate(id, value ? new Date(value) : null, user));
+}
+
+export async function assignAction(fd: FormData) {
+  const user = await requireUser();
+  const buildId = str(fd, "buildId");
+  const id = str(fd, "deliverableId");
+  const assigneeId = str(fd, "assigneeId");
+  await finish(buildId, id, () => assignDeliverable(id, assigneeId || null, user));
 }
