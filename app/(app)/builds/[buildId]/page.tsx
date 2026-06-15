@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth-helpers";
 import { Badge, LinkButton, PageHeader } from "@/components/ui";
 import { formatMinutes } from "@/lib/format";
-import { analyseBuildAction } from "./actions";
+import { analyseBuildAction, syncGhlAction } from "./actions";
 import {
   deliverableStatusClass,
   deliverableStatusLabel,
@@ -52,6 +52,15 @@ export default async function BuildPage({
         subtitle={`${build.engagement.client.name} · ${deliveryTypeLabel[build.engagement.deliveryType]} · ${phaseLabel[build.currentPhase]}`}
       >
         <LinkButton href={`/builds/${build.id}/playbook`}>Brand Messaging Playbook</LinkButton>
+        <LinkButton href={`/builds/${build.id}/leads`}>Leads</LinkButton>
+        {user.role === "ADMIN" || user.role === "SALES" ? (
+          <form action={syncGhlAction}>
+            <input type="hidden" name="buildId" value={build.id} />
+            <button className="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
+              Sync from GHL
+            </button>
+          </form>
+        ) : null}
         {user.role === "ADMIN" ? (
           <form action={analyseBuildAction}>
             <input type="hidden" name="buildId" value={build.id} />

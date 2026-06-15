@@ -6,7 +6,7 @@ import { getEngagementFinancials } from "@/lib/finance-service";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { deliveryTypeLabel, engagementStatusLabel } from "@/lib/labels";
 import { formatMoney, formatHours, formatDate } from "@/lib/format";
-import { addCostAction, generatePnLAction } from "./actions";
+import { addCostAction, generatePnLAction, syncPaymentsAction } from "./actions";
 
 export default async function EngagementPage({
   params,
@@ -156,12 +156,20 @@ export default async function EngagementPage({
               Add cost
             </button>
           </form>
-          <form action={generatePnLAction}>
-            <input type="hidden" name="engagementId" value={engagementId} />
-            <button className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700">
-              {engagement.status === "COMPLETED" ? "Regenerate P&L" : "Complete and generate P&L"}
-            </button>
-          </form>
+          <div className="flex flex-wrap items-center gap-2">
+            <form action={syncPaymentsAction}>
+              <input type="hidden" name="engagementId" value={engagementId} />
+              <button className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
+                Sync payments from GHL
+              </button>
+            </form>
+            <form action={generatePnLAction}>
+              <input type="hidden" name="engagementId" value={engagementId} />
+              <button className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700">
+                {engagement.status === "COMPLETED" ? "Regenerate P&L" : "Complete and generate P&L"}
+              </button>
+            </form>
+          </div>
         </Card>
       ) : null}
     </div>
