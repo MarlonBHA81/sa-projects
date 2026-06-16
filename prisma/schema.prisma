@@ -477,6 +477,7 @@ model Deliverable {
   activities     Activity[]
   timeEntries    TimeEntry[]
   brandPlaybook  BrandPlaybook?
+  rounds         DeliverableRound[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -486,6 +487,20 @@ model Deliverable {
   @@index([funnelBuildId, isCopy, status])
   @@index([department, status])
   @@index([assigneeId])
+}
+
+model DeliverableRound {
+  id            String      @id @default(cuid())
+  deliverable   Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  deliverableId String
+  roundNumber   Int
+  body          Json?
+  note          String?
+  submittedById String?
+  createdAt     DateTime    @default(now())
+
+  @@unique([deliverableId, roundNumber])
+  @@index([deliverableId, roundNumber])
 }
 
 model DeliverableDependency {

@@ -44,10 +44,10 @@ export default async function DeliverablePage({
   searchParams,
 }: {
   params: Promise<{ buildId: string; deliverableId: string }>;
-  searchParams: Promise<{ error?: string; warn?: string }>;
+  searchParams: Promise<{ error?: string; warn?: string; a?: string; b?: string }>;
 }) {
   const { buildId, deliverableId } = await params;
-  const { error, warn } = await searchParams;
+  const { error, warn, a, b } = await searchParams;
   const user = await requireUser();
 
   const d = await prisma.deliverable.findUnique({
@@ -69,6 +69,7 @@ export default async function DeliverablePage({
         take: 8,
         include: { user: { select: { name: true } } },
       },
+      rounds: { orderBy: { roundNumber: "desc" } },
     },
   });
   if (!d || d.funnelBuildId !== buildId) notFound();
@@ -101,6 +102,12 @@ export default async function DeliverablePage({
   const insightFindings = (insight?.detail as { findings?: string[] } | null)?.findings ?? [];
   const insightSuggestions = (insight?.suggestions as { text: string }[] | null) ?? [];
   const openChangeRequests = d.comments.filter((c) => c.isChangeRequest && !c.resolved).length;
+
+  const rounds = d.rounds;
+  const roundText = (r: { body: unknown } | null | undefined) =>
+    (r?.body as { text?: string } | null)?.text ?? "";
+  const roundB = (b ? rounds.find((r) => String(r.roundNumber) === b) : rounds[0]) ?? null;
+  const roundA = (a ? rounds.find((r) => String(r.roundNumber) === a) : rounds[1]) ?? null;
   const hidden = (
     <>
       <input type="hidden" name="buildId" value={buildId} />
@@ -230,6 +237,60 @@ export default async function DeliverablePage({
           </form>
         </Card>
       )}
+
+      {/* Rounds and versions */}
+      {rounds.length > 0 ? (
+        <Card className="mb-6">
+          <h3 className="mb-3 text-sm font-semibold text-zinc-700">Rounds and versions</h3>
+          <div className="mb-3 flex flex-wrap gap-2">
+            {rounds.map((r) => (
+              <span
+                key={r.id}
+                className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-2 py-1 text-xs"
+              >
+                <span className="font-medium text-zinc-800">Round {r.roundNumber}</span>
+                <span className="text-zinc-400">{formatDate(r.createdAt)}</span>
+                <Link
+                  href={`?a=${r.roundNumber}&b=${roundB?.roundNumber ?? r.roundNumber}`}
+                  className={roundA?.id === r.id ? "font-medium text-zinc-900" : "text-zinc-500 hover:text-zinc-900"}
+                >
+                  A
+                </Link>
+                <Link
+                  href={`?a=${roundA?.roundNumber ?? r.roundNumber}&b=${r.roundNumber}`}
+                  className={roundB?.id === r.id ? "font-medium text-zinc-900" : "text-zinc-500 hover:text-zinc-900"}
+                >
+                  B
+                </Link>
+              </span>
+            ))}
+          </div>
+          {roundA && roundB && roundA.id !== roundB.id ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <div className="mb-1 text-xs font-semibold text-zinc-500">
+                  Round {roundA.roundNumber} · {formatDate(roundA.createdAt)}
+                </div>
+                <div className="whitespace-pre-wrap rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+                  {roundText(roundA) || "(empty)"}
+                </div>
+              </div>
+              <div>
+                <div className="mb-1 text-xs font-semibold text-zinc-500">
+                  Round {roundB.roundNumber} · {formatDate(roundB.createdAt)}
+                </div>
+                <div className="whitespace-pre-wrap rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+                  {roundText(roundB) || "(empty)"}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-500">
+              Submit again to capture another round, then compare them side by side.
+            </p>
+          )}
+        </Card>
+      ) : null}
 
       {/* AI review (advisory) */}
       <Card className="mb-6">

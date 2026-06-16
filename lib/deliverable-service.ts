@@ -238,13 +238,23 @@ export async function submitDeliverable(deliverableId: string, actor: SessionUse
 
   await prisma.$transaction(async (tx) => {
     await tx.deliverable.update({ where: { id: d.id }, data: { status: "SUBMITTED" } });
+    // Snapshot this submission as a round, so changes across rounds are reviewable.
+    const roundNumber = (await tx.deliverableRound.count({ where: { deliverableId: d.id } })) + 1;
+    await tx.deliverableRound.create({
+      data: {
+        deliverableId: d.id,
+        roundNumber,
+        body: (d.body ?? undefined) as Prisma.InputJsonValue | undefined,
+        submittedById: actor.id,
+      },
+    });
     await tx.activity.create({
       data: {
         type: "DELIVERABLE_SUBMITTED",
         funnelBuildId: d.funnelBuildId,
         deliverableId: d.id,
         actorId: actor.id,
-        summary: `Submitted "${d.title}" for approval`,
+        summary: `Submitted "${d.title}" for approval (round ${roundNumber})`,
       },
     });
     await progressBuild(tx, d.funnelBuildId);
