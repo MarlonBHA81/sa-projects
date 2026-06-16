@@ -25,6 +25,7 @@ export type DeliverableTemplate = {
   kind?: DeliverableKind; // default STANDARD
   isCopy?: boolean;
   requiresGruntTest?: boolean;
+  requireReviewResolved?: boolean;
   estimateMinutes?: number;
   dependsOnKeys?: string[];
   optionSet?: { prompt: string; minOptions?: number; maxOptions?: number };

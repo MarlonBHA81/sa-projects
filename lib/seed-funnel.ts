@@ -75,6 +75,7 @@ export async function createFunnelBuildFromTemplate(args: CreateFunnelBuildArgs)
               order: order++,
               isCopy: d.isCopy ?? false,
               requiresGruntTest: d.requiresGruntTest ?? false,
+              requireReviewResolved: d.requireReviewResolved ?? true,
               estimateMinutes: rollupEstimate(d.processSteps, d.estimateMinutes),
               processSteps: {
                 create: (d.processSteps ?? []).map((s, i) => ({

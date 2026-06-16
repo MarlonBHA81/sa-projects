@@ -63,6 +63,7 @@ function toDeliverableView(d: LoadedDeliverable): DeliverableView {
     status: d.status,
     isCopy: d.isCopy,
     requiresGruntTest: d.requiresGruntTest,
+    requireReviewResolved: d.requireReviewResolved,
     stageStatus: d.stage.status,
     prerequisitesApproved: d.dependsOn.every((dep) => dep.prerequisite.status === "APPROVED"),
   };
@@ -170,6 +171,7 @@ async function progressBuild(tx: Prisma.TransactionClient, funnelBuildId: string
       status: d.status,
       isCopy: d.isCopy,
       requiresGruntTest: d.requiresGruntTest,
+      requireReviewResolved: d.requireReviewResolved,
       stageStatus,
       prerequisitesApproved: d.dependsOn.every((dep) => dep.prerequisite.status === "APPROVED"),
     };
@@ -268,12 +270,16 @@ export async function approveDeliverable(deliverableId: string, actor: SessionUs
       }
     : null;
 
+  const openChangeRequests = await prisma.comment.count({
+    where: { deliverableId: d.id, isChangeRequest: true, resolved: false },
+  });
   const res = canApproveDeliverable(
     toDeliverableView(d),
     toOptionSetView(d),
     toChecklistView(d),
     actor.role,
     playbook,
+    openChangeRequests,
   );
   if (!res.ok) throw new GateError(res.reason ?? "Cannot approve yet");
 
@@ -585,6 +591,7 @@ export async function reopenCopy(deliverableId: string, actor: SessionUser): Pro
       status: x.status,
       isCopy: false,
       requiresGruntTest: false,
+      requireReviewResolved: false,
       stageStatus: "IN_PROGRESS" as const,
       prerequisitesApproved: true,
     })),
@@ -663,7 +670,13 @@ export async function saveDeliverableBody(
 }
 
 export async function addComment(
-  input: { deliverableId?: string; funnelBuildId: string; body: string; isHandoff?: boolean },
+  input: {
+    deliverableId?: string;
+    funnelBuildId: string;
+    body: string;
+    isHandoff?: boolean;
+    isChangeRequest?: boolean;
+  },
   actor: SessionUser,
 ): Promise<void> {
   if (!input.body.trim()) return;
@@ -680,6 +693,7 @@ export async function addComment(
       data: {
         body: input.body.trim(),
         isHandoff: input.isHandoff ?? false,
+        isChangeRequest: input.isChangeRequest ?? false,
         authorId: actor.id,
         deliverableId: input.deliverableId,
         funnelBuildId: input.funnelBuildId,
@@ -692,8 +706,21 @@ export async function addComment(
         funnelBuildId: input.funnelBuildId,
         deliverableId: input.deliverableId,
         actorId: actor.id,
-        summary: `Commented on ${input.deliverableId ? "a deliverable" : "the build"}`,
+        summary: `${input.isChangeRequest ? "Requested a change on" : "Commented on"} ${input.deliverableId ? "a deliverable" : "the build"}`,
       },
     }),
   ]);
+}
+
+export async function resolveComment(commentId: string, actor: SessionUser): Promise<void> {
+  const comment = await prisma.comment.findUnique({
+    where: { id: commentId },
+    include: { deliverable: { select: { department: true } } },
+  });
+  if (!comment) throw new GateError("Comment not found");
+  if (comment.deliverable) requireOwner(actor, comment.deliverable.department);
+  await prisma.comment.update({
+    where: { id: commentId },
+    data: { resolved: true, resolvedById: actor.id, resolvedAt: new Date() },
+  });
 }

@@ -32,6 +32,7 @@ function deliverable(over: Partial<DeliverableView> = {}): DeliverableView {
     status: "IN_PROGRESS",
     isCopy: true,
     requiresGruntTest: false,
+    requireReviewResolved: true,
     stageStatus: "IN_PROGRESS",
     prerequisitesApproved: true,
     ...over,
@@ -222,6 +223,11 @@ describe("canApproveDeliverable", () => {
   it("lets a super admin approve", () => {
     const res = canApproveDeliverable(submitted, null, [checkItem()], "SUPER_ADMIN");
     expect(res.ok).toBe(true);
+  });
+  it("blocks approval while change requests are open", () => {
+    const res = canApproveDeliverable(submitted, null, [checkItem()], "ADMIN", null, 2);
+    expect(res.ok).toBe(false);
+    expect(res.reason).toMatch(/change request/i);
   });
 });
 

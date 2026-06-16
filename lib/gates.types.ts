@@ -43,6 +43,8 @@ export type DeliverableView = {
   status: DeliverableStatus;
   isCopy: boolean;
   requiresGruntTest: boolean;
+  /** When true, open change requests must be resolved before approval. */
+  requireReviewResolved: boolean;
   /** Status of the stage this deliverable belongs to. */
   stageStatus: StageStatus;
   /** True when every explicit prerequisite deliverable is APPROVED. */

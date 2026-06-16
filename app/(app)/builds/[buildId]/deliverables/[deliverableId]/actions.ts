@@ -10,6 +10,7 @@ import {
   recordGruntTest,
   reopenCopy,
   requestChanges,
+  resolveComment,
   saveDeliverableBody,
   selectOption,
   setChecklistItem,
@@ -168,10 +169,23 @@ export async function addCommentAction(fd: FormData) {
   const id = str(fd, "deliverableId");
   await finish(buildId, id, () =>
     addComment(
-      { deliverableId: id, funnelBuildId: buildId, body: str(fd, "body"), isHandoff: on(fd, "isHandoff") },
+      {
+        deliverableId: id,
+        funnelBuildId: buildId,
+        body: str(fd, "body"),
+        isHandoff: on(fd, "isHandoff"),
+        isChangeRequest: on(fd, "isChangeRequest"),
+      },
       user,
     ),
   );
+}
+
+export async function resolveCommentAction(fd: FormData) {
+  const user = await requireUser();
+  const buildId = str(fd, "buildId");
+  const id = str(fd, "deliverableId");
+  await finish(buildId, id, () => resolveComment(str(fd, "commentId"), user));
 }
 
 export async function startTimerAction(fd: FormData) {

@@ -122,6 +122,7 @@ export function canApproveDeliverable(
   checklist: ChecklistItemView[],
   actorRole: Role,
   playbook?: PlaybookView | null,
+  openChangeRequests = 0,
 ): GateResult {
   if (actorRole !== "ADMIN" && actorRole !== "SUPER_ADMIN") {
     return deny("Only the approver can clear this gate");
@@ -142,6 +143,9 @@ export function canApproveDeliverable(
   if (d.kind === "PLAYBOOK") {
     const complete = isPlaybookComplete(playbook ?? null);
     if (!complete.ok) return complete;
+  }
+  if (d.requireReviewResolved && openChangeRequests > 0) {
+    return deny("Resolve the open change requests first");
   }
   return ALLOW;
 }

@@ -21,6 +21,7 @@ import {
   recordGruntTestAction,
   reopenCopyAction,
   requestChangesAction,
+  resolveCommentAction,
   saveBodyAction,
   selectOptionAction,
   setChecklistAction,
@@ -99,6 +100,7 @@ export default async function DeliverablePage({
   });
   const insightFindings = (insight?.detail as { findings?: string[] } | null)?.findings ?? [];
   const insightSuggestions = (insight?.suggestions as { text: string }[] | null) ?? [];
+  const openChangeRequests = d.comments.filter((c) => c.isChangeRequest && !c.resolved).length;
   const hidden = (
     <>
       <input type="hidden" name="buildId" value={buildId} />
@@ -509,13 +511,23 @@ export default async function DeliverablePage({
 
       {/* Comments / handoff notes */}
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-zinc-700">Comments and handoff notes</h3>
+        <h3 className="mb-3 text-sm font-semibold text-zinc-700">
+          Comments and handoff notes
+          {openChangeRequests > 0 ? (
+            <Badge className="ml-2 bg-red-100 text-red-700">{openChangeRequests} open</Badge>
+          ) : null}
+        </h3>
         <form action={addCommentAction} className="mb-4 flex flex-col gap-2">
           {hidden}
           <textarea name="body" rows={2} placeholder="Add a note…" className="w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm" />
-          <label className="flex items-center gap-2 text-xs text-zinc-500">
-            <input type="checkbox" name="isHandoff" /> Mark as a handoff note
-          </label>
+          <div className="flex flex-wrap gap-4">
+            <label className="flex items-center gap-2 text-xs text-zinc-500">
+              <input type="checkbox" name="isHandoff" /> Mark as a handoff note
+            </label>
+            <label className="flex items-center gap-2 text-xs text-zinc-500">
+              <input type="checkbox" name="isChangeRequest" /> Request a change (blocks approval until resolved)
+            </label>
+          </div>
           <button className={`${secondary} self-start`}>Post</button>
         </form>
         {d.comments.length === 0 ? (
@@ -526,8 +538,21 @@ export default async function DeliverablePage({
               <li key={c.id} className="text-sm">
                 <span className="font-medium text-zinc-800">{c.author.name}</span>
                 {c.isHandoff ? <Badge className="ml-2 bg-amber-100 text-amber-800">handoff</Badge> : null}
+                {c.isChangeRequest && !c.resolved ? (
+                  <Badge className="ml-2 bg-red-100 text-red-700">change requested</Badge>
+                ) : null}
+                {c.isChangeRequest && c.resolved ? (
+                  <Badge className="ml-2 bg-green-100 text-green-700">resolved</Badge>
+                ) : null}
                 <span className="ml-2 text-xs text-zinc-400">{formatDate(c.createdAt)}</span>
                 <p className="mt-0.5 text-zinc-600">{c.body}</p>
+                {c.isChangeRequest && !c.resolved && (isOwner || isAdmin) ? (
+                  <form action={resolveCommentAction} className="mt-1">
+                    {hidden}
+                    <input type="hidden" name="commentId" value={c.id} />
+                    <button className="text-xs text-zinc-500 hover:text-zinc-900">Mark resolved</button>
+                  </form>
+                ) : null}
               </li>
             ))}
           </ul>
