@@ -32,6 +32,7 @@ import {
   stopTimerAction,
   submitAction,
 } from "./actions";
+import { deleteEntityAction } from "@/app/(app)/manage-actions";
 
 const btn = "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors";
 const primary = `${btn} bg-zinc-900 text-white hover:bg-zinc-700`;
@@ -42,10 +43,10 @@ export default async function DeliverablePage({
   searchParams,
 }: {
   params: Promise<{ buildId: string; deliverableId: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; warn?: string }>;
 }) {
   const { buildId, deliverableId } = await params;
-  const { error } = await searchParams;
+  const { error, warn } = await searchParams;
   const user = await requireUser();
 
   const d = await prisma.deliverable.findUnique({
@@ -124,6 +125,20 @@ export default async function DeliverablePage({
           {error}
         </div>
       ) : null}
+      {warn ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          Other work depends on this: {warn}.
+          <form action={deleteEntityAction} className="mt-2">
+            <input type="hidden" name="entity" value="deliverable" />
+            <input type="hidden" name="id" value={deliverableId} />
+            <input type="hidden" name="confirm" value="1" />
+            <input type="hidden" name="redirectTo" value={`/builds/${buildId}`} />
+            <button className="rounded-lg bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-700">
+              Delete anyway
+            </button>
+          </form>
+        </div>
+      ) : null}
 
       <div className="mb-6 flex flex-wrap items-center gap-3 text-sm text-zinc-500">
         <span>{departmentLabel[d.department]}</span>
@@ -167,6 +182,21 @@ export default async function DeliverablePage({
           <form action={reopenCopyAction}>
             {hidden}
             <button className={secondary}>Reopen copy (resync)</button>
+          </form>
+        ) : null}
+        {isAdmin ? (
+          <form action={deleteEntityAction}>
+            <input type="hidden" name="entity" value="deliverable" />
+            <input type="hidden" name="id" value={deliverableId} />
+            <input type="hidden" name="redirectTo" value={`/builds/${buildId}`} />
+            <input
+              type="hidden"
+              name="warnTo"
+              value={`/builds/${buildId}/deliverables/${deliverableId}`}
+            />
+            <button className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">
+              Delete
+            </button>
           </form>
         ) : null}
       </div>

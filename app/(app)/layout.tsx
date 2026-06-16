@@ -20,6 +20,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const isAdmin = user.role === "ADMIN" || user.role === "SUPER_ADMIN";
+  const isSuper = user.role === "SUPER_ADMIN";
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-7xl bg-zinc-50">
@@ -34,8 +35,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           <NavLink href="/engagements">Engagements</NavLink>
           <NavLink href="/projects">Projects</NavLink>
           <NavLink href="/workload">Workload</NavLink>
+          <NavLink href="/activity">Activity</NavLink>
           <NavLink href="/insights">Insights</NavLink>
           {isAdmin ? <NavLink href="/approvals">Approvals</NavLink> : null}
+          {isSuper ? <NavLink href="/trash">Trash</NavLink> : null}
         </nav>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">

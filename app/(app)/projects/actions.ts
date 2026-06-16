@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireUser, isAdmin, AuthError } from "@/lib/auth-helpers";
+import { prisma } from "@/lib/db";
+import { softDelete } from "@/lib/soft-delete";
 import {
   createProject,
   createTask,
@@ -88,6 +90,26 @@ export async function deleteTaskAction(fd: FormData) {
   const projectId = str(fd, "projectId");
   const id = str(fd, "taskId");
   await backToProject(projectId, () => deleteTask(id, user));
+}
+
+export async function deleteProjectAction(fd: FormData) {
+  const user = await requireUser();
+  const id = String(fd.get("projectId") ?? "");
+  try {
+    const project = await prisma.project.findFirst({
+      where: { id, deletedAt: null },
+      select: { ownerId: true },
+    });
+    if (!project) throw new AuthError("Project not found");
+    if (!isAdmin(user) && project.ownerId !== user.id) {
+      throw new AuthError("Only the owner can delete this project");
+    }
+    await softDelete("project", id, user);
+  } catch (e) {
+    redirect(`/projects/${id}?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not delete")}`);
+  }
+  revalidatePath("/projects");
+  redirect("/projects");
 }
 
 export async function setDependencyAction(fd: FormData) {

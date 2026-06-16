@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireUser, isAdmin } from "@/lib/auth-helpers";
 import { Card, PageHeader } from "@/components/ui";
 import { formatMinutes } from "@/lib/format";
 import type { PlanningLane } from "@prisma/client";
 import {
   createTaskAction,
+  deleteProjectAction,
   deleteTaskAction,
   moveTaskAction,
   setDependencyAction,
@@ -29,7 +30,7 @@ export default async function ProjectPage({
 }) {
   const { id } = await params;
   const { error } = await searchParams;
-  await requireUser();
+  const user = await requireUser();
 
   const project = await prisma.project.findFirst({
     where: { id, deletedAt: null },
@@ -62,7 +63,16 @@ export default async function ProjectPage({
           Projects
         </Link>
       </div>
-      <PageHeader title={project.name} subtitle={project.description ?? `Owner: ${project.owner.name}`} />
+      <PageHeader title={project.name} subtitle={project.description ?? `Owner: ${project.owner.name}`}>
+        {isAdmin(user) || project.ownerId === user.id ? (
+          <form action={deleteProjectAction}>
+            <input type="hidden" name="projectId" value={project.id} />
+            <button className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">
+              Delete project
+            </button>
+          </form>
+        ) : null}
+      </PageHeader>
       {error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>
       ) : null}

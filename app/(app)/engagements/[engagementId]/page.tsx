@@ -7,6 +7,7 @@ import { Badge, Card, PageHeader } from "@/components/ui";
 import { deliveryTypeLabel, engagementStatusLabel } from "@/lib/labels";
 import { formatMoney, formatHours, formatDate } from "@/lib/format";
 import { addBuildAction, addCostAction, generatePnLAction, syncPaymentsAction } from "./actions";
+import { deleteEntityAction } from "@/app/(app)/manage-actions";
 
 export default async function EngagementPage({
   params,
@@ -196,6 +197,14 @@ export default async function EngagementPage({
               <input type="hidden" name="engagementId" value={engagementId} />
               <button className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700">
                 {engagement.status === "COMPLETED" ? "Regenerate P&L" : "Complete and generate P&L"}
+              </button>
+            </form>
+            <form action={deleteEntityAction}>
+              <input type="hidden" name="entity" value="engagement" />
+              <input type="hidden" name="id" value={engagementId} />
+              <input type="hidden" name="redirectTo" value="/engagements" />
+              <button className="rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">
+                Delete engagement
               </button>
             </form>
           </div>

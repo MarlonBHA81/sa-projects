@@ -44,6 +44,8 @@ Copy `.env.example` to `.env` and fill it in.
 - `lib/brs-template.ts`, `lib/seed-funnel.ts` — the BRS template and create-from-template seeding.
 - `lib/deliverable-service.ts` — loads data, calls gates, writes with an Activity.
 - `lib/ghl/*`, `lib/n8n/*`, `lib/ai/*`, `lib/finance.ts`, `lib/capacity.ts`, `lib/time.ts` — integrations and ops.
+- `lib/board.ts`, `lib/sprints.ts`, `lib/tasks.ts` — the planning board (drag a card between lanes; this sets `planningLane`/`sprintId` only and never the gate status), per-build sprints, and the general tracker plus ad-hoc tasks.
+- `lib/soft-delete.ts`, `lib/activity.ts` — soft delete (super-admin-only purge/restore via `/trash`) and the interaction/audit log (`/activity`, with my and team views).
 - `auth.ts` / `auth.config.ts` / `proxy.ts` — Auth.js v5 (config split edge-safe for the proxy).
 - Mutations are Server Actions; route handlers only for Auth.js, cron, and the GHL webhook.
 
@@ -51,3 +53,5 @@ Copy `.env.example` to `.env` and fill it in.
 
 - UI copy follows the brand voice: British English, sentence case, no em or en dashes, short and outcome-led.
 - The AI layer is advisory only. It never clears a gate, approves, selects an option, or edits content.
+- Roles: `SUPER_ADMIN` (Marlon) is the approver and the only one who can permanently delete; `ADMIN` is also an approver; `isApprover`/`isAdmin` in `lib/auth-helpers.ts` are the single source of truth, so never compare to the literal `"ADMIN"` in new code.
+- The planning lanes and sprints are a separate layer from the BRS gates. Dragging a card must never change a deliverable's gate `status`.

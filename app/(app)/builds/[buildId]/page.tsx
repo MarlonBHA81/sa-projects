@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth-helpers";
 import { Badge, LinkButton, PageHeader } from "@/components/ui";
 import { formatMinutes } from "@/lib/format";
 import { analyseBuildAction, syncGhlAction } from "./actions";
+import { deleteEntityAction } from "@/app/(app)/manage-actions";
 import {
   deliverableStatusClass,
   deliverableStatusLabel,
@@ -64,12 +65,22 @@ export default async function BuildPage({
           </form>
         ) : null}
         {user.role === "ADMIN" || user.role === "SUPER_ADMIN" ? (
-          <form action={analyseBuildAction}>
-            <input type="hidden" name="buildId" value={build.id} />
-            <button className="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
-              Analyse build
-            </button>
-          </form>
+          <>
+            <form action={analyseBuildAction}>
+              <input type="hidden" name="buildId" value={build.id} />
+              <button className="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
+                Analyse build
+              </button>
+            </form>
+            <form action={deleteEntityAction}>
+              <input type="hidden" name="entity" value="funnelBuild" />
+              <input type="hidden" name="id" value={build.id} />
+              <input type="hidden" name="redirectTo" value={`/engagements/${build.engagementId}`} />
+              <button className="inline-flex items-center rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50">
+                Delete build
+              </button>
+            </form>
+          </>
         ) : null}
       </PageHeader>
 

@@ -219,6 +219,10 @@ describe("canApproveDeliverable", () => {
     );
     expect(res.ok).toBe(true);
   });
+  it("lets a super admin approve", () => {
+    const res = canApproveDeliverable(submitted, null, [checkItem()], "SUPER_ADMIN");
+    expect(res.ok).toBe(true);
+  });
 });
 
 describe("stage gates", () => {
