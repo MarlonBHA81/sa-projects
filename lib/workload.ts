@@ -10,7 +10,8 @@ export type WorkloadPerson = {
   userId: string;
   name: string;
   weeklyCapacityMinutes: number;
-  committedMinutes: number; // remaining estimate on active assigned work
+  committedMinutes: number; // remaining estimate on active (confirmed) assigned work
+  tentativeMinutes: number; // estimate on assigned work still blocked behind a gate
   loggedMinutes: number; // time logged this period
 };
 
@@ -32,8 +33,12 @@ export function summariseWorkload(
   entries: WorkloadInputEntry[],
 ): WorkloadPerson[] {
   return users.map((u) => {
-    const committedMinutes = deliverables
-      .filter((d) => d.assigneeId === u.id && ACTIVE_STATUSES.has(d.status))
+    const mine = deliverables.filter((d) => d.assigneeId === u.id);
+    const committedMinutes = mine
+      .filter((d) => ACTIVE_STATUSES.has(d.status))
+      .reduce((acc, d) => acc + (d.estimateMinutes ?? 0), 0);
+    const tentativeMinutes = mine
+      .filter((d) => d.status === "BLOCKED")
       .reduce((acc, d) => acc + (d.estimateMinutes ?? 0), 0);
     const loggedMinutes = entries
       .filter((e) => e.userId === u.id)
@@ -43,6 +48,7 @@ export function summariseWorkload(
       name: u.name,
       weeklyCapacityMinutes: (u.weeklyCapacityHours ?? 0) * 60,
       committedMinutes,
+      tentativeMinutes,
       loggedMinutes,
     };
   });

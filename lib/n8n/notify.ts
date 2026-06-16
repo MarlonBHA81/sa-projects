@@ -10,6 +10,7 @@ export type AppEventType =
   | "BUILD_LIVE"
   | "DUE_SOON"
   | "OVERDUE"
+  | "AWAITING_APPROVAL"
   | "GHL_SYNCED"
   | "ENGAGEMENT_COMPLETED"
   | "AI_INSIGHT_HIGH";

@@ -42,6 +42,7 @@ export default async function WorkloadPage() {
 
   const totalCapacity = rows.reduce((a, r) => a + r.weeklyCapacityMinutes, 0);
   const totalCommitted = rows.reduce((a, r) => a + r.committedMinutes, 0);
+  const totalTentative = rows.reduce((a, r) => a + r.tentativeMinutes, 0);
   const freeCapacity = Math.max(0, totalCapacity - totalCommitted);
 
   return (
@@ -51,7 +52,7 @@ export default async function WorkloadPage() {
         subtitle="Committed work against weekly capacity. Can the team take more on?"
       />
 
-      <div className="mb-6 grid grid-cols-3 gap-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Card>
           <div className="text-xs text-zinc-500">Weekly capacity</div>
           <div className="mt-1 text-xl font-semibold text-zinc-900">{formatHours(totalCapacity)}</div>
@@ -59,6 +60,10 @@ export default async function WorkloadPage() {
         <Card>
           <div className="text-xs text-zinc-500">Committed</div>
           <div className="mt-1 text-xl font-semibold text-zinc-900">{formatHours(totalCommitted)}</div>
+        </Card>
+        <Card>
+          <div className="text-xs text-zinc-500">Tentative (behind gates)</div>
+          <div className="mt-1 text-xl font-semibold text-amber-700">{formatHours(totalTentative)}</div>
         </Card>
         <Card>
           <div className="text-xs text-zinc-500">Free capacity</div>
@@ -86,6 +91,7 @@ export default async function WorkloadPage() {
               <div className="mt-2 flex justify-between text-xs text-zinc-500">
                 <span>
                   Committed {formatHours(r.committedMinutes)} of {formatHours(r.weeklyCapacityMinutes)}
+                  {r.tentativeMinutes > 0 ? ` · ${formatHours(r.tentativeMinutes)} tentative` : ""}
                 </span>
                 <span>
                   {free > 0 ? `${formatHours(free)} free` : "at capacity"} · logged {formatHours(r.loggedMinutes)} this week
