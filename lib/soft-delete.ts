@@ -19,30 +19,48 @@ export type SoftDeletable =
 
 type DeletedData = { deletedAt: Date | null; deletedById: string | null };
 
+// Soft delete (and restore) cascades the deletedAt stamp to descendants, so a
+// deleted client/engagement/build never leaves orphaned rows in cross-cutting
+// views (workload, sprint capacity, time rollups).
 async function applyDeleted(entity: SoftDeletable, id: string, data: DeletedData): Promise<void> {
-  switch (entity) {
-    case "client":
-      await prisma.client.update({ where: { id }, data });
-      break;
-    case "engagement":
-      await prisma.engagement.update({ where: { id }, data });
-      break;
-    case "funnelBuild":
-      await prisma.funnelBuild.update({ where: { id }, data });
-      break;
-    case "deliverable":
-      await prisma.deliverable.update({ where: { id }, data });
-      break;
-    case "sprint":
-      await prisma.sprint.update({ where: { id }, data });
-      break;
-    case "project":
-      await prisma.project.update({ where: { id }, data });
-      break;
-    case "task":
-      await prisma.task.update({ where: { id }, data });
-      break;
-  }
+  await prisma.$transaction(async (tx) => {
+    switch (entity) {
+      case "client":
+        await tx.deliverable.updateMany({ where: { funnelBuild: { engagement: { clientId: id } } }, data });
+        await tx.task.updateMany({ where: { funnelBuild: { engagement: { clientId: id } } }, data });
+        await tx.sprint.updateMany({ where: { funnelBuild: { engagement: { clientId: id } } }, data });
+        await tx.funnelBuild.updateMany({ where: { engagement: { clientId: id } }, data });
+        await tx.engagement.updateMany({ where: { clientId: id }, data });
+        await tx.client.update({ where: { id }, data });
+        break;
+      case "engagement":
+        await tx.deliverable.updateMany({ where: { funnelBuild: { engagementId: id } }, data });
+        await tx.task.updateMany({ where: { funnelBuild: { engagementId: id } }, data });
+        await tx.sprint.updateMany({ where: { funnelBuild: { engagementId: id } }, data });
+        await tx.funnelBuild.updateMany({ where: { engagementId: id }, data });
+        await tx.engagement.update({ where: { id }, data });
+        break;
+      case "funnelBuild":
+        await tx.deliverable.updateMany({ where: { funnelBuildId: id }, data });
+        await tx.task.updateMany({ where: { funnelBuildId: id }, data });
+        await tx.sprint.updateMany({ where: { funnelBuildId: id }, data });
+        await tx.funnelBuild.update({ where: { id }, data });
+        break;
+      case "project":
+        await tx.task.updateMany({ where: { projectId: id }, data });
+        await tx.project.update({ where: { id }, data });
+        break;
+      case "deliverable":
+        await tx.deliverable.update({ where: { id }, data });
+        break;
+      case "sprint":
+        await tx.sprint.update({ where: { id }, data });
+        break;
+      case "task":
+        await tx.task.update({ where: { id }, data });
+        break;
+    }
+  });
 }
 
 async function hardDelete(entity: SoftDeletable, id: string): Promise<void> {
@@ -95,6 +113,7 @@ export async function softDelete(
   id: string,
   actor: SessionUser,
 ): Promise<void> {
+  if (!actor?.id) throw new AuthError("You must be signed in");
   await applyDeleted(entity, id, { deletedAt: new Date(), deletedById: actor.id });
   await recordActivity({
     type: "ITEM_SOFT_DELETED",

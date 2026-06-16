@@ -137,16 +137,51 @@ export async function generatePnL(engagementId: string, actor: SessionUser): Pro
   });
 }
 
-/** Portfolio margin by delivery type, for the dashboard and efficiency views. */
+/** Portfolio margin by delivery type, for the dashboard and efficiency views.
+ *  Uses grouped aggregates (not a per-engagement loop) so it stays O(1) queries. */
 export async function getMarginByDeliveryType() {
   const engagements = await prisma.engagement.findMany({
-    select: { id: true, deliveryType: true },
+    where: { deletedAt: null },
+    select: { id: true, deliveryType: true, price: true },
   });
-  const rows = await Promise.all(
-    engagements.map(async (e) => {
-      const fin = await getEngagementFinancials(e.id);
-      return { deliveryType: e.deliveryType, revenue: fin.revenueTotal, cost: fin.deliveryCost + fin.adSpend + fin.otherCosts };
+  if (engagements.length === 0) return marginByDeliveryType([]);
+
+  const [paymentsByEng, costsByEng, builds, channels, timeEntries] = await Promise.all([
+    prisma.payment.groupBy({ by: ["engagementId"], where: { status: "PAID" }, _sum: { amount: true } }),
+    prisma.engagementCost.groupBy({ by: ["engagementId"], _sum: { amount: true } }),
+    prisma.funnelBuild.findMany({ where: { deletedAt: null }, select: { id: true, engagementId: true } }),
+    prisma.revenueChannel.groupBy({ by: ["funnelBuildId"], _sum: { spend: true } }),
+    prisma.timeEntry.findMany({
+      where: { deliverable: { deletedAt: null, funnelBuild: { engagement: { deletedAt: null } } } },
+      select: {
+        durationMinutes: true,
+        deliverable: { select: { funnelBuild: { select: { engagementId: true } } } },
+        user: { select: { costRatePerHour: true } },
+      },
     }),
-  );
+  ]);
+
+  const paid = new Map(paymentsByEng.map((p) => [p.engagementId, Number(p._sum.amount ?? 0)]));
+  const otherCosts = new Map(costsByEng.map((c) => [c.engagementId, Number(c._sum.amount ?? 0)]));
+  const buildToEng = new Map(builds.map((b) => [b.id, b.engagementId]));
+  const adSpend = new Map<string, number>();
+  for (const ch of channels) {
+    const engId = buildToEng.get(ch.funnelBuildId);
+    if (engId) adSpend.set(engId, (adSpend.get(engId) ?? 0) + Number(ch._sum.spend ?? 0));
+  }
+  const deliveryCost = new Map<string, number>();
+  for (const t of timeEntries) {
+    const engId = t.deliverable?.funnelBuild?.engagementId;
+    if (!engId) continue;
+    const rate = Number(t.user?.costRatePerHour ?? 0);
+    deliveryCost.set(engId, (deliveryCost.get(engId) ?? 0) + ((t.durationMinutes ?? 0) / 60) * rate);
+  }
+
+  const rows = engagements.map((e) => {
+    const payments = paid.get(e.id) ?? 0;
+    const revenue = payments > 0 ? payments : Number(e.price ?? 0);
+    const cost = (deliveryCost.get(e.id) ?? 0) + (adSpend.get(e.id) ?? 0) + (otherCosts.get(e.id) ?? 0);
+    return { deliveryType: e.deliveryType, revenue, cost };
+  });
   return marginByDeliveryType(rows);
 }

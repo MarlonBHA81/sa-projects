@@ -667,6 +667,14 @@ export async function addComment(
   actor: SessionUser,
 ): Promise<void> {
   if (!input.body.trim()) return;
+  if (input.deliverableId) {
+    const d = await prisma.deliverable.findUnique({
+      where: { id: input.deliverableId },
+      select: { department: true, funnelBuildId: true },
+    });
+    if (!d || d.funnelBuildId !== input.funnelBuildId) throw new GateError("Deliverable not found");
+    requireOwner(actor, d.department);
+  }
   await prisma.$transaction([
     prisma.comment.create({
       data: {

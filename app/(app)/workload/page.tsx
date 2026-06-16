@@ -21,12 +21,15 @@ export default async function WorkloadPage() {
     orderBy: [{ department: "asc" }, { name: "asc" }],
   });
   const deliverables = await prisma.deliverable.findMany({
-    where: { deletedAt: null },
+    where: { deletedAt: null, funnelBuild: { deletedAt: null } },
     select: { assigneeId: true, status: true, estimateMinutes: true },
   });
   const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
   const entries = await prisma.timeEntry.findMany({
-    where: { createdAt: { gte: since } },
+    where: {
+      createdAt: { gte: since },
+      OR: [{ deliverable: { deletedAt: null } }, { task: { deletedAt: null } }],
+    },
     select: { userId: true, durationMinutes: true },
   });
 
