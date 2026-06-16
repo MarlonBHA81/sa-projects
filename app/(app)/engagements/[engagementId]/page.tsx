@@ -6,7 +6,7 @@ import { getEngagementFinancials } from "@/lib/finance-service";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { deliveryTypeLabel, engagementStatusLabel } from "@/lib/labels";
 import { formatMoney, formatHours, formatDate } from "@/lib/format";
-import { addCostAction, generatePnLAction, syncPaymentsAction } from "./actions";
+import { addBuildAction, addCostAction, generatePnLAction, syncPaymentsAction } from "./actions";
 
 export default async function EngagementPage({
   params,
@@ -24,7 +24,10 @@ export default async function EngagementPage({
     where: { id: engagementId },
     include: {
       client: true,
-      funnelBuilds: { include: { deliverables: { select: { status: true } } } },
+      funnelBuilds: {
+        where: { deletedAt: null },
+        include: { deliverables: { where: { deletedAt: null }, select: { status: true } } },
+      },
       costs: { orderBy: { createdAt: "desc" } },
       pnl: true,
     },
@@ -129,7 +132,33 @@ export default async function EngagementPage({
               </Link>
             );
           })}
+          {engagement.funnelBuilds.length === 0 ? (
+            <p className="text-sm text-zinc-500">No builds yet.</p>
+          ) : null}
         </div>
+        {isAdmin ? (
+          <form action={addBuildAction} className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-3">
+            <input type="hidden" name="engagementId" value={engagementId} />
+            <input
+              name="name"
+              placeholder="Build name"
+              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm"
+            />
+            <select
+              name="conversionGoal"
+              defaultValue=""
+              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm"
+            >
+              <option value="">Goal…</option>
+              <option value="BOOK_A_CALL">Book a call</option>
+              <option value="BUY">Buy</option>
+              <option value="REGISTER">Register</option>
+            </select>
+            <button className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
+              Add build from template
+            </button>
+          </form>
+        ) : null}
       </Card>
 
       {/* Costs + complete (admin) */}

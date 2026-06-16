@@ -30,6 +30,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         </div>
         <nav className="flex flex-col gap-1 text-sm">
           <NavLink href="/dashboard">Dashboard</NavLink>
+          <NavLink href="/clients">Clients</NavLink>
           <NavLink href="/engagements">Engagements</NavLink>
           <NavLink href="/workload">Workload</NavLink>
           <NavLink href="/insights">Insights</NavLink>

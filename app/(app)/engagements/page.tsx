@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
-import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
+import { requireUser, isAdmin } from "@/lib/auth-helpers";
+import { Badge, Card, EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { deliveryTypeLabel, engagementStatusLabel } from "@/lib/labels";
 import { formatMoney } from "@/lib/format";
 
 export default async function EngagementsPage() {
-  await requireUser();
+  const user = await requireUser();
   const engagements = await prisma.engagement.findMany({
     where: { deletedAt: null },
     orderBy: { createdAt: "desc" },
@@ -18,7 +18,13 @@ export default async function EngagementsPage() {
 
   return (
     <div>
-      <PageHeader title="Engagements" subtitle="The commercial work, by delivery model." />
+      <PageHeader title="Engagements" subtitle="The commercial work, by delivery model.">
+        {isAdmin(user) ? (
+          <LinkButton href="/engagements/new" variant="primary">
+            New engagement
+          </LinkButton>
+        ) : null}
+      </PageHeader>
       {engagements.length === 0 ? (
         <EmptyState>No engagements yet.</EmptyState>
       ) : (
