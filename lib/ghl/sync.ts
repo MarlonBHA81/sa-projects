@@ -2,14 +2,14 @@
 // milestones. Everything is guarded so a missing token simply skips.
 
 import { prisma } from "../db";
-import { AuthError, type SessionUser } from "../auth-helpers";
+import { AuthError, isApprover, type SessionUser } from "../auth-helpers";
 import { emitEvent } from "../n8n/notify";
 import { ghlConfigured, listContacts, listInvoices, upsertContact } from "./client";
 
 export type SyncResult = { skipped: true; reason: string } | { imported: number };
 
 function requireSalesOrAdmin(actor: SessionUser) {
-  if (actor.role !== "ADMIN" && actor.role !== "SALES") {
+  if (!isApprover(actor.role) && actor.role !== "SALES") {
     throw new AuthError("Only sales or the approver can sync GoHighLevel");
   }
 }

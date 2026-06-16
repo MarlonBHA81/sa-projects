@@ -17,7 +17,7 @@ type SeedUser = {
 };
 
 const USERS: SeedUser[] = [
-  { email: "marlon@storyadvantage.co", name: "Marlon", role: "ADMIN", department: null, costRatePerHour: 1200, weeklyCapacityHours: 20 },
+  { email: "marlon@storyadvantage.co", name: "Marlon", role: "SUPER_ADMIN", department: null, costRatePerHour: 1200, weeklyCapacityHours: 20 },
   { email: "strategy@storyadvantage.co", name: "Purple Ocean Navigator", role: "STRATEGY", department: "STRATEGY", costRatePerHour: 900, weeklyCapacityHours: 30 },
   { email: "copy@storyadvantage.co", name: "Resonance Engine Builder", role: "COPY", department: "COPY", costRatePerHour: 750, weeklyCapacityHours: 30 },
   { email: "design@storyadvantage.co", name: "Visual Authority Architect", role: "DESIGN", department: "DESIGN", costRatePerHour: 700, weeklyCapacityHours: 30 },
@@ -48,11 +48,11 @@ async function main() {
         department: u.department,
         costRatePerHour: u.costRatePerHour,
         weeklyCapacityHours: u.weeklyCapacityHours,
-        billable: u.role !== "ADMIN",
+        billable: u.department !== null,
         passwordHash,
       },
     });
-    if (u.role === "ADMIN") adminId = user.id;
+    if (u.department === null) adminId = user.id;
     if (u.department) byDept.set(u.department, user.id);
   }
 

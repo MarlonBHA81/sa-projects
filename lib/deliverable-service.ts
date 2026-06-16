@@ -21,7 +21,7 @@ import type {
   OptionSetView,
 } from "./gates.types";
 import { emitEvent } from "./n8n/notify";
-import { AuthError, canActOnDepartment, type SessionUser } from "./auth-helpers";
+import { AuthError, canActOnDepartment, isApprover, type SessionUser } from "./auth-helpers";
 import type { Prisma } from "@prisma/client";
 
 export class GateError extends Error {
@@ -257,7 +257,7 @@ export async function submitDeliverable(deliverableId: string, actor: SessionUse
 }
 
 export async function approveDeliverable(deliverableId: string, actor: SessionUser): Promise<void> {
-  if (actor.role !== "ADMIN") throw new AuthError("Only the approver can clear this gate");
+  if (!isApprover(actor.role)) throw new AuthError("Only the approver can clear this gate");
   const d = await loadDeliverable(deliverableId);
 
   const playbook = d.brandPlaybook
@@ -341,7 +341,7 @@ export async function requestChanges(
   note: string | undefined,
   actor: SessionUser,
 ): Promise<void> {
-  if (actor.role !== "ADMIN") throw new AuthError("Only the approver can request changes");
+  if (!isApprover(actor.role)) throw new AuthError("Only the approver can request changes");
   const d = await loadDeliverable(deliverableId);
   if (d.status !== "SUBMITTED") throw new GateError("Only submitted work can be sent back");
 
@@ -405,7 +405,7 @@ export async function selectOption(
   optionId: string,
   actor: SessionUser,
 ): Promise<void> {
-  if (actor.role !== "ADMIN") throw new AuthError("Only the approver can select the winning option");
+  if (!isApprover(actor.role)) throw new AuthError("Only the approver can select the winning option");
   const d = await loadDeliverable(deliverableId);
   if (!d.optionSet) throw new GateError("This deliverable has no option set");
   const belongs = d.optionSet.options.some((o) => o.id === optionId);
@@ -566,7 +566,7 @@ export async function savePlaybook(
 }
 
 export async function reopenCopy(deliverableId: string, actor: SessionUser): Promise<void> {
-  if (actor.role !== "ADMIN") throw new AuthError("Only the approver can reopen locked copy");
+  if (!isApprover(actor.role)) throw new AuthError("Only the approver can reopen locked copy");
   const d = await loadDeliverable(deliverableId);
   if (!d.isCopy || d.status !== "APPROVED") {
     throw new GateError("Only approved copy can be reopened");

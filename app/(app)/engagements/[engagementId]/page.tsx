@@ -18,7 +18,7 @@ export default async function EngagementPage({
   const { engagementId } = await params;
   const { error, completed } = await searchParams;
   const user = await requireUser();
-  const isAdmin = user.role === "ADMIN";
+  const isAdmin = user.role === "ADMIN" || user.role === "SUPER_ADMIN";
 
   const engagement = await prisma.engagement.findUnique({
     where: { id: engagementId },

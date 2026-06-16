@@ -13,16 +13,18 @@ export default async function DashboardPage() {
   const user = await requireUser();
 
   const builds = await prisma.funnelBuild.findMany({
+    where: { deletedAt: null },
     orderBy: { createdAt: "desc" },
     include: {
       engagement: { include: { client: true } },
-      deliverables: { select: { status: true } },
+      deliverables: { where: { deletedAt: null }, select: { status: true } },
     },
   });
 
   const myWork = await prisma.deliverable.findMany({
     where: {
       assigneeId: user.id,
+      deletedAt: null,
       status: { in: ["NOT_STARTED", "IN_PROGRESS", "CHANGES_NEEDED"] },
     },
     include: { funnelBuild: { select: { id: true, name: true } } },
@@ -31,13 +33,13 @@ export default async function DashboardPage() {
   });
 
   const pendingApprovals =
-    user.role === "ADMIN" ? await prisma.deliverable.count({ where: { status: "SUBMITTED" } }) : 0;
+    (user.role === "ADMIN" || user.role === "SUPER_ADMIN") ? await prisma.deliverable.count({ where: { status: "SUBMITTED", deletedAt: null } }) : 0;
 
   return (
     <div>
       <PageHeader title="Dashboard" subtitle="Where every funnel build stands right now." />
 
-      {user.role === "ADMIN" && pendingApprovals > 0 ? (
+      {(user.role === "ADMIN" || user.role === "SUPER_ADMIN") && pendingApprovals > 0 ? (
         <div className="mb-6 flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-5 py-3">
           <span className="text-sm text-amber-900">
             {pendingApprovals} {pendingApprovals === 1 ? "item is" : "items are"} waiting on your approval.

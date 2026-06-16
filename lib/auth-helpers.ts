@@ -28,9 +28,28 @@ export async function requireUser(): Promise<SessionUser> {
   return user;
 }
 
+/** The approver powers (clear gates, select options) belong to ADMIN and SUPER_ADMIN. */
+export function isApprover(role: Role): boolean {
+  return role === "ADMIN" || role === "SUPER_ADMIN";
+}
+
+export function isAdmin(user: Pick<SessionUser, "role">): boolean {
+  return isApprover(user.role);
+}
+
+export function isSuperAdmin(user: Pick<SessionUser, "role">): boolean {
+  return user.role === "SUPER_ADMIN";
+}
+
 export async function requireAdmin(): Promise<SessionUser> {
   const user = await requireUser();
-  if (user.role !== "ADMIN") throw new AuthError("This action is for the approver only");
+  if (!isAdmin(user)) throw new AuthError("This action is for the approver only");
+  return user;
+}
+
+export async function requireSuperAdmin(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!isSuperAdmin(user)) throw new AuthError("This action is for the super admin only");
   return user;
 }
 
@@ -40,16 +59,12 @@ export async function requireRole(roles: Role[]): Promise<SessionUser> {
   return user;
 }
 
-export function isAdmin(user: Pick<SessionUser, "role">): boolean {
-  return user.role === "ADMIN";
-}
-
-/** Department users may act on their own department's work; ADMIN may act on anything. */
+/** Department users may act on their own department's work; an admin may act on anything. */
 export function canActOnDepartment(
   user: Pick<SessionUser, "role" | "department">,
   department: Department,
 ): boolean {
-  return user.role === "ADMIN" || user.department === department;
+  return isAdmin(user) || user.department === department;
 }
 
 export async function requireDepartmentOwnership(department: Department): Promise<SessionUser> {

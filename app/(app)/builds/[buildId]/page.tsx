@@ -34,6 +34,7 @@ export default async function BuildPage({
         orderBy: { order: "asc" },
         include: {
           deliverables: {
+            where: { deletedAt: null },
             orderBy: { order: "asc" },
             include: { assignee: { select: { name: true } } },
           },
@@ -54,7 +55,7 @@ export default async function BuildPage({
         <LinkButton href={`/builds/${build.id}/playbook`}>Brand Messaging Playbook</LinkButton>
         <LinkButton href={`/builds/${build.id}/board`}>Board</LinkButton>
         <LinkButton href={`/builds/${build.id}/leads`}>Leads</LinkButton>
-        {user.role === "ADMIN" || user.role === "SALES" ? (
+        {user.role === "ADMIN" || user.role === "SUPER_ADMIN" || user.role === "SALES" ? (
           <form action={syncGhlAction}>
             <input type="hidden" name="buildId" value={build.id} />
             <button className="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50">
@@ -62,7 +63,7 @@ export default async function BuildPage({
             </button>
           </form>
         ) : null}
-        {user.role === "ADMIN" ? (
+        {user.role === "ADMIN" || user.role === "SUPER_ADMIN" ? (
           <form action={analyseBuildAction}>
             <input type="hidden" name="buildId" value={build.id} />
             <button className="inline-flex items-center rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50">

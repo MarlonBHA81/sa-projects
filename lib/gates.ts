@@ -123,7 +123,7 @@ export function canApproveDeliverable(
   actorRole: Role,
   playbook?: PlaybookView | null,
 ): GateResult {
-  if (actorRole !== "ADMIN") {
+  if (actorRole !== "ADMIN" && actorRole !== "SUPER_ADMIN") {
     return deny("Only the approver can clear this gate");
   }
   if (d.status !== "SUBMITTED") {

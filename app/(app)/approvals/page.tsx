@@ -12,10 +12,10 @@ const primary = "rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-whi
 
 export default async function ApprovalsPage() {
   const user = await requireUser();
-  if (user.role !== "ADMIN") redirect("/dashboard");
+  if (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") redirect("/dashboard");
 
   const submitted = await prisma.deliverable.findMany({
-    where: { status: "SUBMITTED" },
+    where: { status: "SUBMITTED", deletedAt: null },
     orderBy: { updatedAt: "asc" },
     include: {
       funnelBuild: { select: { id: true, name: true, engagement: { select: { client: { select: { name: true } } } } } },

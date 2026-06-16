@@ -83,7 +83,10 @@ async function persistInsight(args: {
 
 // Activities require an actor; fall back to an admin when none is supplied (cron).
 async function systemActorId(): Promise<string> {
-  const admin = await prisma.user.findFirst({ where: { role: "ADMIN" }, select: { id: true } });
+  const admin = await prisma.user.findFirst({
+    where: { role: { in: ["ADMIN", "SUPER_ADMIN"] } },
+    select: { id: true },
+  });
   if (!admin) throw new Error("No admin user to attribute the activity to");
   return admin.id;
 }

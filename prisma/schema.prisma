@@ -22,6 +22,7 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 enum Role {
+  SUPER_ADMIN
   ADMIN
   STRATEGY
   COPY
@@ -147,6 +148,21 @@ enum ActivityType {
   AI_INSIGHT_RESOLVED
   ENGAGEMENT_COMPLETED
   PNL_GENERATED
+  CLIENT_CREATED
+  CLIENT_UPDATED
+  ENGAGEMENT_CREATED
+  ENGAGEMENT_UPDATED
+  BUILD_CREATED
+  DELIVERABLE_UPDATED
+  DELIVERABLE_MOVED
+  SPRINT_CREATED
+  SPRINT_UPDATED
+  TASK_CREATED
+  TASK_UPDATED
+  TASK_MOVED
+  ITEM_SOFT_DELETED
+  ITEM_RESTORED
+  ITEM_PURGED
 }
 
 enum AiScope {
@@ -180,6 +196,26 @@ enum AiInsightStatus {
   DISMISSED
 }
 
+enum PlanningLane {
+  BACKLOG
+  TODO
+  DOING
+  BLOCKED
+  DONE
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
 // ---------------------------------------------------------------------------
 // Auth.js v5 models + User
 // ---------------------------------------------------------------------------
@@ -208,6 +244,8 @@ model User {
   activities           Activity[]
   resolvedInsights     AiInsight[]
   aiUsage              AiUsageLog[]
+  ownedProjects        Project[]
+  assignedTasks        Task[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -261,6 +299,8 @@ model Client {
   industry    String?
   notes       String?
   engagements Engagement[]
+  deletedAt   DateTime?
+  deletedById String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
@@ -280,6 +320,8 @@ model Engagement {
   startDate    DateTime?
   endDate      DateTime?
   completedAt  DateTime?
+  deletedAt    DateTime?
+  deletedById  String?
 
   funnelBuilds FunnelBuild[]
   payments     Payment[]
@@ -358,6 +400,10 @@ model FunnelBuild {
   activities    Activity[]
   channels      RevenueChannel[]
   leads         Lead[]
+  sprints       Sprint[]
+  tasks         Task[]
+  deletedAt     DateTime?
+  deletedById   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -409,6 +455,11 @@ model Deliverable {
   approvedAt        DateTime?
   assignee          User?             @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
   assigneeId        String?
+  planningLane      PlanningLane      @default(BACKLOG)
+  sprint            Sprint?           @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  sprintId          String?
+  deletedAt         DateTime?
+  deletedById       String?
 
   dependsOn      DeliverableDependency[] @relation("Dependent")
   dependedOnBy   DeliverableDependency[] @relation("Prerequisite")
@@ -594,10 +645,14 @@ model Activity {
   actorId       String
   summary       String
   meta          Json?
+  entityType    String?
+  entityId      String?
   createdAt     DateTime     @default(now())
 
   @@index([funnelBuildId, createdAt])
   @@index([engagementId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
 }
 
 // ---------------------------------------------------------------------------
@@ -605,19 +660,22 @@ model Activity {
 // ---------------------------------------------------------------------------
 
 model TimeEntry {
-  id              String      @id @default(cuid())
-  deliverable     Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
-  deliverableId   String
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String       @id @default(cuid())
+  deliverable     Deliverable? @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  deliverableId   String?
+  task            Task?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId          String?
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId          String
-  startedAt       DateTime    @default(now())
+  startedAt       DateTime     @default(now())
   endedAt         DateTime?
   durationMinutes Int?
   note            String?
-  isRunning       Boolean     @default(true)
-  createdAt       DateTime    @default(now())
+  isRunning       Boolean      @default(true)
+  createdAt       DateTime     @default(now())
 
   @@index([deliverableId])
+  @@index([taskId])
   @@index([userId, isRunning])
 }
 
@@ -739,4 +797,84 @@ model AiUsageLog {
   createdAt        DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Planning: sprints, the general tracker, and ad-hoc tasks
+// ---------------------------------------------------------------------------
+
+model Sprint {
+  id            String        @id @default(cuid())
+  funnelBuild   FunnelBuild   @relation(fields: [funnelBuildId], references: [id], onDelete: Cascade)
+  funnelBuildId String
+  name          String
+  goal          String?
+  startDate     DateTime?
+  endDate       DateTime?
+  status        SprintStatus  @default(PLANNED)
+  deliverables  Deliverable[]
+  tasks         Task[]
+  deletedAt     DateTime?
+  deletedById   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([funnelBuildId])
+}
+
+model Project {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  owner       User      @relation(fields: [ownerId], references: [id])
+  ownerId     String
+  tasks       Task[]
+  deletedAt   DateTime?
+  deletedById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([ownerId])
+}
+
+model Task {
+  id              String           @id @default(cuid())
+  title           String
+  description     String?
+  project         Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId       String?
+  funnelBuild     FunnelBuild?     @relation(fields: [funnelBuildId], references: [id], onDelete: Cascade)
+  funnelBuildId   String?
+  sprint          Sprint?          @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  sprintId        String?
+  status          TaskStatus       @default(OPEN)
+  planningLane    PlanningLane     @default(TODO)
+  assignee        User?            @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  assigneeId      String?
+  estimateMinutes Int?
+  dueDate         DateTime?
+  order           Int              @default(0)
+  timeEntries     TimeEntry[]
+  dependsOn       TaskDependency[] @relation("TaskDependent")
+  dependedOnBy    TaskDependency[] @relation("TaskPrerequisite")
+  deletedAt       DateTime?
+  deletedById     String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([projectId])
+  @@index([funnelBuildId])
+  @@index([sprintId])
+  @@index([assigneeId])
+}
+
+model TaskDependency {
+  id             String @id @default(cuid())
+  dependent      Task   @relation("TaskDependent", fields: [dependentId], references: [id], onDelete: Cascade)
+  dependentId    String
+  prerequisite   Task   @relation("TaskPrerequisite", fields: [prerequisiteId], references: [id], onDelete: Cascade)
+  prerequisiteId String
+
+  @@unique([dependentId, prerequisiteId])
+  @@index([prerequisiteId])
 }

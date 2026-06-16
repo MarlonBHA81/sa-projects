@@ -72,7 +72,7 @@ export default async function DeliverablePage({
   if (!d || d.funnelBuildId !== buildId) notFound();
 
   const isOwner = canActOnDepartment(user, d.department);
-  const isAdmin = user.role === "ADMIN";
+  const isAdmin = user.role === "ADMIN" || user.role === "SUPER_ADMIN";
 
   const loggedAgg = await prisma.timeEntry.aggregate({
     where: { deliverableId },
@@ -86,7 +86,7 @@ export default async function DeliverablePage({
   const deptUsers =
     isOwner || isAdmin
       ? await prisma.user.findMany({
-          where: { OR: [{ department: d.department }, { role: "ADMIN" }] },
+          where: { OR: [{ department: d.department }, { role: { in: ["ADMIN", "SUPER_ADMIN"] } }] },
           select: { id: true, name: true },
           orderBy: { name: "asc" },
         })

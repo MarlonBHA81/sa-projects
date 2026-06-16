@@ -16,7 +16,7 @@ export default async function InsightsPage({
 }) {
   const { error } = await searchParams;
   const user = await requireUser();
-  const isAdmin = user.role === "ADMIN";
+  const isAdmin = user.role === "ADMIN" || user.role === "SUPER_ADMIN";
 
   const insights = await prisma.aiInsight.findMany({
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],

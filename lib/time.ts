@@ -57,10 +57,15 @@ export async function startTimer(deliverableId: string, actor: SessionUser): Pro
 export async function stopTimer(actor: SessionUser): Promise<void> {
   const running = await prisma.timeEntry.findFirst({
     where: { userId: actor.id, isRunning: true },
-    include: { deliverable: { select: { funnelBuildId: true, title: true } } },
+    include: {
+      deliverable: { select: { funnelBuildId: true, title: true } },
+      task: { select: { funnelBuildId: true, title: true } },
+    },
   });
   if (!running) return;
   const ended = new Date();
+  const title = running.deliverable?.title ?? running.task?.title ?? "a task";
+  const funnelBuildId = running.deliverable?.funnelBuildId ?? running.task?.funnelBuildId ?? undefined;
   await prisma.$transaction([
     prisma.timeEntry.update({
       where: { id: running.id },
@@ -69,10 +74,10 @@ export async function stopTimer(actor: SessionUser): Promise<void> {
     prisma.activity.create({
       data: {
         type: "TIMER_STOPPED",
-        funnelBuildId: running.deliverable.funnelBuildId,
-        deliverableId: running.deliverableId,
+        funnelBuildId,
+        deliverableId: running.deliverableId ?? undefined,
         actorId: actor.id,
-        summary: `Stopped a timer on "${running.deliverable.title}"`,
+        summary: `Stopped a timer on "${title}"`,
       },
     }),
   ]);

@@ -21,6 +21,7 @@ export default async function WorkloadPage() {
     orderBy: [{ department: "asc" }, { name: "asc" }],
   });
   const deliverables = await prisma.deliverable.findMany({
+    where: { deletedAt: null },
     select: { assigneeId: true, status: true, estimateMinutes: true },
   });
   const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);

@@ -19,7 +19,7 @@ function NavLink({ href, children }: { href: string; children: ReactNode }) {
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  const isAdmin = user.role === "ADMIN";
+  const isAdmin = user.role === "ADMIN" || user.role === "SUPER_ADMIN";
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-7xl bg-zinc-50">

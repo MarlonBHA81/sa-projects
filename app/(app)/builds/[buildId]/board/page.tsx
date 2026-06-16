@@ -38,7 +38,7 @@ export default async function BoardPage({
   if (!build) notFound();
 
   const deliverables = await prisma.deliverable.findMany({
-    where: { funnelBuildId: buildId, ...(activeDept ? { department: activeDept } : {}) },
+    where: { funnelBuildId: buildId, deletedAt: null, ...(activeDept ? { department: activeDept } : {}) },
     orderBy: { order: "asc" },
     include: { assignee: { select: { name: true } } },
   });

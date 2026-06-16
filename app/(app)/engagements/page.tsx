@@ -8,8 +8,12 @@ import { formatMoney } from "@/lib/format";
 export default async function EngagementsPage() {
   await requireUser();
   const engagements = await prisma.engagement.findMany({
+    where: { deletedAt: null },
     orderBy: { createdAt: "desc" },
-    include: { client: true, funnelBuilds: { select: { id: true, name: true } } },
+    include: {
+      client: true,
+      funnelBuilds: { where: { deletedAt: null }, select: { id: true, name: true } },
+    },
   });
 
   return (

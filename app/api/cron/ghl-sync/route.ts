@@ -9,7 +9,10 @@ export async function GET(req: Request) {
   if (!authorizeCron(req)) return new NextResponse("Unauthorized", { status: 401 });
   if (!ghlConfigured()) return NextResponse.json({ skipped: true, reason: "GHL not configured" });
 
-  const admin = await prisma.user.findFirst({ where: { role: "ADMIN" }, select: { id: true } });
+  const admin = await prisma.user.findFirst({
+    where: { role: { in: ["ADMIN", "SUPER_ADMIN"] } },
+    select: { id: true },
+  });
   if (!admin) return NextResponse.json({ skipped: true, reason: "No admin user" });
   const actor: SessionUser = { id: admin.id, role: "ADMIN", department: null };
 

@@ -2,7 +2,7 @@
 // and margin; generate the P&L on completion; record ad-hoc costs.
 
 import { prisma } from "./db";
-import { AuthError, type SessionUser } from "./auth-helpers";
+import { AuthError, isApprover, type SessionUser } from "./auth-helpers";
 import { emitEvent } from "./n8n/notify";
 import { computeDeliveryCost, computePnL, marginByDeliveryType, round2, type PnLSummary } from "./finance";
 
@@ -66,7 +66,7 @@ export async function addEngagementCost(
   input: { label: string; category?: string; amount: number },
   actor: SessionUser,
 ): Promise<void> {
-  if (actor.role !== "ADMIN") throw new AuthError("Only the approver can record costs");
+  if (!isApprover(actor.role)) throw new AuthError("Only the approver can record costs");
   if (!input.label.trim() || !Number.isFinite(input.amount) || input.amount <= 0) return;
   await prisma.engagementCost.create({
     data: { engagementId, label: input.label.trim(), category: input.category, amount: input.amount },
@@ -74,7 +74,7 @@ export async function addEngagementCost(
 }
 
 export async function generatePnL(engagementId: string, actor: SessionUser): Promise<void> {
-  if (actor.role !== "ADMIN") throw new AuthError("Only the approver can complete an engagement");
+  if (!isApprover(actor.role)) throw new AuthError("Only the approver can complete an engagement");
   const fin = await getEngagementFinancials(engagementId);
 
   const lines = [
