@@ -6,19 +6,20 @@ import { requireUser } from "@/lib/auth-helpers";
 import { moveDeliverableLane, setDeliverableSprint } from "@/lib/board";
 import { createTask, deleteTask, moveTask } from "@/lib/tasks";
 import { createSprint } from "@/lib/sprints";
-import type { PlanningLane } from "@prisma/client";
+import type { Department, PlanningLane } from "@prisma/client";
 
-// Called from the drag-and-drop board. Sets the planning lane only; the gated
-// deliverable status is never touched here.
+// Called from the drag-and-drop board. Sets the planning lane (and, for tasks,
+// the department of the row it was dropped in). Never touches the gated status.
 export async function moveCardAction(
   buildId: string,
   kind: "deliverable" | "task",
   id: string,
   lane: PlanningLane,
+  department: Department | null,
 ) {
   const user = await requireUser();
   if (kind === "deliverable") await moveDeliverableLane(id, lane, user);
-  else await moveTask(id, { planningLane: lane }, user);
+  else await moveTask(id, { planningLane: lane, department }, user);
   revalidatePath(`/builds/${buildId}/board`);
   revalidatePath(`/builds/${buildId}`);
 }
@@ -46,6 +47,7 @@ export async function addTaskAction(fd: FormData) {
         assigneeId: String(fd.get("assigneeId") ?? "") || null,
         planningLane: (String(fd.get("planningLane") ?? "TODO") as PlanningLane) || "TODO",
         sprintId: String(fd.get("sprintId") ?? "") || null,
+        department: (String(fd.get("department") ?? "") as Department) || null,
         estimateMinutes: String(fd.get("estimateMinutes") ?? "") ? Number(fd.get("estimateMinutes")) : null,
       },
       user,

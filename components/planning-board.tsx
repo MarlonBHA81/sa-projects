@@ -12,7 +12,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import type { PlanningLane } from "@prisma/client";
+import type { Department, PlanningLane } from "@prisma/client";
 
 export type BoardCard = {
   dndId: string;
@@ -20,6 +20,9 @@ export type BoardCard = {
   id: string;
   title: string;
   lane: PlanningLane;
+  departmentKey: string; // Department or "GENERAL"
+  departmentLabel: string;
+  departmentClass: string;
   statusLabel: string;
   statusClass: string;
   meta: string;
@@ -28,14 +31,21 @@ export type BoardCard = {
   sprintId: string | null;
 };
 export type BoardLane = { key: PlanningLane; label: string };
+export type BoardRow = { key: string; label: string };
 export type BoardSprint = { id: string; name: string };
 
-type MoveAction = (kind: "deliverable" | "task", id: string, lane: PlanningLane) => Promise<void>;
+type MoveAction = (
+  kind: "deliverable" | "task",
+  id: string,
+  lane: PlanningLane,
+  department: Department | null,
+) => Promise<void>;
 type FormAction = (fd: FormData) => void | Promise<void>;
 
 export function PlanningBoard({
   buildId,
   lanes,
+  rows,
   cards,
   sprints,
   onMove,
@@ -44,6 +54,7 @@ export function PlanningBoard({
 }: {
   buildId: string;
   lanes: BoardLane[];
+  rows: BoardRow[];
   cards: BoardCard[];
   sprints: BoardSprint[];
   onMove: MoveAction;
@@ -55,62 +66,89 @@ export function PlanningBoard({
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   function handleDragEnd(event: DragEndEvent) {
-    const lane = event.over?.id as PlanningLane | undefined;
-    if (!lane) return;
+    if (!event.over) return;
+    const [rowKey, laneKey] = String(event.over.id).split(":");
     const card = cards.find((c) => c.dndId === event.active.id);
-    if (!card || card.lane === lane) return;
+    if (!card || !rowKey || !laneKey) return;
+    if (card.lane === laneKey && card.departmentKey === rowKey) return;
+    const department = rowKey === "GENERAL" ? null : (rowKey as Department);
     startTransition(async () => {
-      await onMove(card.kind, card.id, lane);
+      await onMove(card.kind, card.id, laneKey as PlanningLane, department);
       router.refresh();
     });
   }
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {lanes.map((lane) => (
-          <Lane key={lane.key} lane={lane} count={cards.filter((c) => c.lane === lane.key).length}>
-            {cards
-              .filter((c) => c.lane === lane.key)
-              .map((c) => (
-                <Card
-                  key={c.dndId}
-                  card={c}
-                  buildId={buildId}
-                  sprints={sprints}
-                  assignSprint={assignSprint}
-                  deleteTask={deleteTask}
-                />
-              ))}
-          </Lane>
+      <div className="overflow-x-auto pb-4">
+        {/* Lane headers */}
+        <div className="flex gap-3 pl-32">
+          {lanes.map((l) => (
+            <div key={l.key} className="w-56 shrink-0 px-1 text-sm font-medium text-zinc-700">
+              {l.label}
+            </div>
+          ))}
+        </div>
+
+        {rows.map((row) => (
+          <div key={row.key} className="mt-2 flex gap-3">
+            <div className="flex w-32 shrink-0 items-start pt-2">
+              <span className="text-xs font-semibold text-zinc-600">{row.label}</span>
+            </div>
+            {lanes.map((lane) => (
+              <Cell
+                key={`${row.key}:${lane.key}`}
+                rowKey={row.key}
+                laneKey={lane.key}
+                cards={cards.filter((c) => c.departmentKey === row.key && c.lane === lane.key)}
+                buildId={buildId}
+                sprints={sprints}
+                assignSprint={assignSprint}
+                deleteTask={deleteTask}
+              />
+            ))}
+          </div>
         ))}
       </div>
     </DndContext>
   );
 }
 
-function Lane({
-  lane,
-  count,
-  children,
+function Cell({
+  rowKey,
+  laneKey,
+  cards,
+  buildId,
+  sprints,
+  assignSprint,
+  deleteTask,
 }: {
-  lane: BoardLane;
-  count: number;
-  children: React.ReactNode;
+  rowKey: string;
+  laneKey: string;
+  cards: BoardCard[];
+  buildId: string;
+  sprints: BoardSprint[];
+  assignSprint: FormAction;
+  deleteTask: FormAction;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: lane.key });
+  const { setNodeRef, isOver } = useDroppable({ id: `${rowKey}:${laneKey}` });
   return (
-    <div className="w-64 shrink-0">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-medium text-zinc-700">{lane.label}</span>
-        <span className="text-xs text-zinc-400">{count}</span>
-      </div>
-      <div
-        ref={setNodeRef}
-        className={`flex min-h-24 flex-col gap-2 rounded-lg p-1 transition-colors ${isOver ? "bg-blue-50" : ""}`}
-      >
-        {children}
-      </div>
+    <div
+      ref={setNodeRef}
+      className={`flex min-h-20 w-56 shrink-0 flex-col gap-2 rounded-lg p-1 transition-colors ${
+        isOver ? "bg-blue-50" : "bg-zinc-50/60"
+      }`}
+    >
+      {cards.map((c) => (
+        <Card
+          key={c.dndId}
+          card={c}
+          buildId={buildId}
+          sprints={sprints}
+          assignSprint={assignSprint}
+          deleteTask={deleteTask}
+        />
+      ))}
     </div>
   );
 }
@@ -141,12 +179,15 @@ function Card({
       <div {...listeners} {...attributes} className="cursor-grab touch-none font-medium text-zinc-900">
         {card.title}
       </div>
-      <div className="mt-1 flex items-center justify-between text-xs">
-        <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${card.statusClass}`}>
+      <div className="mt-1 flex flex-wrap items-center gap-1">
+        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${card.departmentClass}`}>
+          {card.departmentLabel}
+        </span>
+        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${card.statusClass}`}>
           {card.statusLabel}
         </span>
-        <span className="text-zinc-500">{card.meta}</span>
       </div>
+      {card.meta ? <div className="mt-1 text-xs text-zinc-500">{card.meta}</div> : null}
       {card.blockers.length ? (
         <div className="mt-1 text-xs text-orange-700">blocked by: {card.blockers.join(", ")}</div>
       ) : null}

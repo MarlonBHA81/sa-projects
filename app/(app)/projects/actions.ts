@@ -13,7 +13,7 @@ import {
   setTaskDependency,
   updateTask,
 } from "@/lib/tasks";
-import type { PlanningLane } from "@prisma/client";
+import type { Department, PlanningLane } from "@prisma/client";
 
 function str(fd: FormData, key: string): string {
   return String(fd.get(key) ?? "");
@@ -53,6 +53,7 @@ export async function createTaskAction(fd: FormData) {
         assigneeId: str(fd, "assigneeId") || null,
         estimateMinutes: str(fd, "estimateMinutes") ? Number(str(fd, "estimateMinutes")) : null,
         planningLane: (str(fd, "planningLane") || "TODO") as PlanningLane,
+        department: (str(fd, "department") as Department) || null,
       },
       user,
     ).then(() => undefined),

@@ -6,7 +6,7 @@ import { prisma } from "./db";
 import { AuthError, isAdmin, type SessionUser } from "./auth-helpers";
 import { recordActivity } from "./activity";
 import { softDelete } from "./soft-delete";
-import type { PlanningLane, TaskStatus } from "@prisma/client";
+import type { Department, PlanningLane, TaskStatus } from "@prisma/client";
 
 export class TaskError extends Error {
   constructor(message: string) {
@@ -65,6 +65,7 @@ export type CreateTaskInput = {
   estimateMinutes?: number | null;
   dueDate?: Date | null;
   planningLane?: PlanningLane;
+  department?: Department | null;
 };
 
 export async function createTask(input: CreateTaskInput, actor: SessionUser): Promise<string> {
@@ -93,6 +94,7 @@ export async function createTask(input: CreateTaskInput, actor: SessionUser): Pr
       estimateMinutes: input.estimateMinutes ?? null,
       dueDate: input.dueDate ?? null,
       planningLane: input.planningLane ?? "TODO",
+      department: input.department ?? null,
       order: (last?.order ?? -1) + 1,
     },
   });
@@ -144,7 +146,12 @@ export async function updateTask(
 /** Move a card between planning lanes and/or sprints. Never touches gate status. */
 export async function moveTask(
   id: string,
-  change: { planningLane?: PlanningLane; sprintId?: string | null; status?: TaskStatus },
+  change: {
+    planningLane?: PlanningLane;
+    sprintId?: string | null;
+    status?: TaskStatus;
+    department?: Department | null;
+  },
   actor: SessionUser,
 ): Promise<void> {
   const task = await loadTask(id);
@@ -154,6 +161,7 @@ export async function moveTask(
       planningLane: change.planningLane,
       sprintId: change.sprintId === undefined ? undefined : change.sprintId,
       status: change.status,
+      department: change.department === undefined ? undefined : change.department,
     },
   });
   await recordActivity({

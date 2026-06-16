@@ -7,13 +7,16 @@ import { formatHours } from "@/lib/format";
 import {
   deliverableStatusClass,
   deliverableStatusLabel,
+  departmentClass,
   departmentLabel,
+  generalChipClass,
 } from "@/lib/labels";
 import { listSprints, sprintCapacity } from "@/lib/sprints";
 import {
   PlanningBoard,
   type BoardCard,
   type BoardLane,
+  type BoardRow,
 } from "@/components/planning-board";
 import {
   addTaskAction,
@@ -95,9 +98,12 @@ export default async function BoardPage({
       id: d.id,
       title: d.title,
       lane: d.planningLane,
+      departmentKey: d.department,
+      departmentLabel: departmentLabel[d.department],
+      departmentClass: departmentClass[d.department],
       statusLabel: deliverableStatusLabel[d.status],
       statusClass: deliverableStatusClass[d.status],
-      meta: `${departmentLabel[d.department]}${d.assignee?.name ? ` · ${d.assignee.name}` : ""}`,
+      meta: d.assignee?.name ?? "Unassigned",
       blockers: d.dependsOn
         .filter((dep) => dep.prerequisite.deletedAt === null && dep.prerequisite.status !== "APPROVED")
         .map((dep) => dep.prerequisite.title),
@@ -110,6 +116,9 @@ export default async function BoardPage({
       id: t.id,
       title: t.title,
       lane: t.planningLane,
+      departmentKey: t.department ?? "GENERAL",
+      departmentLabel: t.department ? departmentLabel[t.department] : "General",
+      departmentClass: t.department ? departmentClass[t.department] : generalChipClass,
       statusLabel: "Task",
       statusClass: "bg-zinc-100 text-zinc-600",
       meta: t.assignee?.name ?? "Unassigned",
@@ -120,6 +129,15 @@ export default async function BoardPage({
       sprintId: t.sprintId,
     })),
   ];
+
+  const visibleCards = activeDept ? cards.filter((c) => c.departmentKey === activeDept) : cards;
+  const hasGeneral = visibleCards.some((c) => c.departmentKey === "GENERAL");
+  const rows: BoardRow[] = activeDept
+    ? [{ key: activeDept, label: departmentLabel[activeDept] }]
+    : [
+        ...DEPARTMENTS.map((d) => ({ key: d as string, label: departmentLabel[d] })),
+        ...(hasGeneral ? [{ key: "GENERAL", label: "General" }] : []),
+      ];
 
   const capacity = activeSprint ? await sprintCapacity(activeSprint.id) : [];
   const tab = (active: boolean) =>
@@ -199,6 +217,14 @@ export default async function BoardPage({
               </option>
             ))}
           </select>
+          <select name="department" defaultValue={activeDept ?? ""} className={field}>
+            <option value="">General</option>
+            {DEPARTMENTS.map((d) => (
+              <option key={d} value={d}>
+                {departmentLabel[d]}
+              </option>
+            ))}
+          </select>
           <select name="assigneeId" defaultValue="" className={field}>
             <option value="">Unassigned</option>
             {users.map((u) => (
@@ -217,7 +243,8 @@ export default async function BoardPage({
       <PlanningBoard
         buildId={buildId}
         lanes={LANES}
-        cards={cards}
+        rows={rows}
+        cards={visibleCards}
         sprints={sprints.map((s) => ({ id: s.id, name: s.name }))}
         onMove={moveCardAction.bind(null, buildId)}
         assignSprint={assignCardSprintAction}

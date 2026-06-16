@@ -845,6 +845,7 @@ model Task {
   projectId       String?
   funnelBuild     FunnelBuild?     @relation(fields: [funnelBuildId], references: [id], onDelete: Cascade)
   funnelBuildId   String?
+  department      Department?
   sprint          Sprint?          @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   sprintId        String?
   status          TaskStatus       @default(OPEN)

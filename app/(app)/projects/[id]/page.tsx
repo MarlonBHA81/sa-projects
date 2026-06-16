@@ -4,7 +4,8 @@ import { prisma } from "@/lib/db";
 import { requireUser, isAdmin } from "@/lib/auth-helpers";
 import { Card, PageHeader } from "@/components/ui";
 import { formatMinutes } from "@/lib/format";
-import type { PlanningLane } from "@prisma/client";
+import { departmentClass, departmentLabel, generalChipClass } from "@/lib/labels";
+import type { Department, PlanningLane } from "@prisma/client";
 import {
   createTaskAction,
   deleteProjectAction,
@@ -20,6 +21,7 @@ const LANES: { key: PlanningLane; label: string }[] = [
   { key: "BLOCKED", label: "Blocked" },
   { key: "DONE", label: "Done" },
 ];
+const DEPARTMENTS: Department[] = ["STRATEGY", "COPY", "DESIGN", "DEV", "SALES"];
 
 export default async function ProjectPage({
   params,
@@ -88,6 +90,14 @@ export default async function ProjectPage({
               </option>
             ))}
           </select>
+          <select name="department" defaultValue="" className={field}>
+            <option value="">General</option>
+            {DEPARTMENTS.map((d) => (
+              <option key={d} value={d}>
+                {departmentLabel[d]}
+              </option>
+            ))}
+          </select>
           <select name="assigneeId" defaultValue="" className={field}>
             <option value="">Unassigned</option>
             {users.map((u) => (
@@ -120,6 +130,15 @@ export default async function ProjectPage({
                   return (
                     <div key={t.id} className="rounded-lg border border-zinc-200 bg-white p-3 text-sm shadow-sm">
                       <div className="font-medium text-zinc-900">{t.title}</div>
+                      <div className="mt-1">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                            t.department ? departmentClass[t.department] : generalChipClass
+                          }`}
+                        >
+                          {t.department ? departmentLabel[t.department] : "General"}
+                        </span>
+                      </div>
                       <div className="mt-1 flex items-center justify-between text-xs text-zinc-500">
                         <span>{t.assignee?.name ?? "Unassigned"}</span>
                         <span>{formatMinutes(t.estimateMinutes)}</span>

@@ -54,6 +54,17 @@ export const departmentLabel: Record<Department, string> = {
   SALES: "Sales",
 };
 
+export const departmentClass: Record<Department, string> = {
+  STRATEGY: "bg-purple-100 text-purple-700",
+  COPY: "bg-blue-100 text-blue-700",
+  DESIGN: "bg-pink-100 text-pink-700",
+  DEV: "bg-emerald-100 text-emerald-700",
+  SALES: "bg-amber-100 text-amber-700",
+};
+
+/** Chip styling for an ad-hoc task with no department. */
+export const generalChipClass = "bg-zinc-100 text-zinc-600";
+
 export const deliveryTypeLabel: Record<DeliveryType, string> = {
   DIY: "Do it yourself",
   DWY: "Done with you",
