@@ -42,6 +42,22 @@ type MoveAction = (
 ) => Promise<void>;
 type FormAction = (fd: FormData) => void | Promise<void>;
 
+const LANE_OPTIONS: { value: PlanningLane; label: string }[] = [
+  { value: "BACKLOG", label: "Backlog" },
+  { value: "TODO", label: "To do" },
+  { value: "DOING", label: "Doing" },
+  { value: "BLOCKED", label: "Blocked" },
+  { value: "DONE", label: "Done" },
+];
+const DEPT_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "General" },
+  { value: "STRATEGY", label: "Strategy" },
+  { value: "COPY", label: "Copy" },
+  { value: "DESIGN", label: "Design" },
+  { value: "DEV", label: "Web dev" },
+  { value: "SALES", label: "Sales" },
+];
+
 export function PlanningBoard({
   buildId,
   lanes,
@@ -49,6 +65,7 @@ export function PlanningBoard({
   cards,
   sprints,
   onMove,
+  moveForm,
   assignSprint,
   deleteTask,
 }: {
@@ -58,6 +75,7 @@ export function PlanningBoard({
   cards: BoardCard[];
   sprints: BoardSprint[];
   onMove: MoveAction;
+  moveForm: FormAction;
   assignSprint: FormAction;
   deleteTask: FormAction;
 }) {
@@ -103,6 +121,7 @@ export function PlanningBoard({
                 cards={cards.filter((c) => c.departmentKey === row.key && c.lane === lane.key)}
                 buildId={buildId}
                 sprints={sprints}
+                moveForm={moveForm}
                 assignSprint={assignSprint}
                 deleteTask={deleteTask}
               />
@@ -120,6 +139,7 @@ function Cell({
   cards,
   buildId,
   sprints,
+  moveForm,
   assignSprint,
   deleteTask,
 }: {
@@ -128,6 +148,7 @@ function Cell({
   cards: BoardCard[];
   buildId: string;
   sprints: BoardSprint[];
+  moveForm: FormAction;
   assignSprint: FormAction;
   deleteTask: FormAction;
 }) {
@@ -145,6 +166,7 @@ function Cell({
           card={c}
           buildId={buildId}
           sprints={sprints}
+          moveForm={moveForm}
           assignSprint={assignSprint}
           deleteTask={deleteTask}
         />
@@ -157,12 +179,14 @@ function Card({
   card,
   buildId,
   sprints,
+  moveForm,
   assignSprint,
   deleteTask,
 }: {
   card: BoardCard;
   buildId: string;
   sprints: BoardSprint[];
+  moveForm: FormAction;
   assignSprint: FormAction;
   deleteTask: FormAction;
 }) {
@@ -199,6 +223,38 @@ function Card({
         className="mt-2 flex flex-wrap items-center gap-2"
         onPointerDown={(e) => e.stopPropagation()}
       >
+        <form action={moveForm} className="flex items-center gap-1">
+          <input type="hidden" name="buildId" value={buildId} />
+          <input type="hidden" name="kind" value={card.kind} />
+          <input type="hidden" name="id" value={card.id} />
+          <select
+            name="lane"
+            defaultValue={card.lane}
+            aria-label="Lane"
+            className="rounded border border-zinc-300 px-1 py-0.5 text-xs"
+          >
+            {LANE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {card.kind === "task" ? (
+            <select
+              name="department"
+              defaultValue={card.departmentKey === "GENERAL" ? "" : card.departmentKey}
+              aria-label="Team"
+              className="rounded border border-zinc-300 px-1 py-0.5 text-xs"
+            >
+              {DEPT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          <button className="text-xs text-zinc-600 hover:text-zinc-900">Move</button>
+        </form>
         {card.href ? (
           <Link href={card.href} className="text-xs text-zinc-600 hover:text-zinc-900">
             Open

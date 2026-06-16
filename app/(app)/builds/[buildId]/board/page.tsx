@@ -24,6 +24,7 @@ import {
   createSprintAction,
   deleteBoardTaskAction,
   moveCardAction,
+  moveCardFormAction,
 } from "./actions";
 import type { Department } from "@prisma/client";
 
@@ -247,6 +248,7 @@ export default async function BoardPage({
         cards={visibleCards}
         sprints={sprints.map((s) => ({ id: s.id, name: s.name }))}
         onMove={moveCardAction.bind(null, buildId)}
+        moveForm={moveCardFormAction}
         assignSprint={assignCardSprintAction}
         deleteTask={deleteBoardTaskAction}
       />

@@ -77,6 +77,20 @@ export type GhlInvoice = {
 
 export type GhlLocation = { id?: string; _id?: string; name?: string; companyId?: string };
 
+/** Test the GoHighLevel connection against a location, returning the real error. */
+export async function pingLocation(
+  locationId: string,
+): Promise<{ ok: boolean; name?: string; error?: string }> {
+  try {
+    const data = await ghlFetch<{ location?: GhlLocation }>(
+      `/locations/${encodeURIComponent(locationId)}`,
+    );
+    return { ok: true, name: data.location?.name ?? "(unnamed location)" };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Unknown error" };
+  }
+}
+
 /** Fetch a sub-account (location) by id. Used to import a client. */
 export async function getLocation(locationId: string): Promise<GhlLocation | null> {
   try {

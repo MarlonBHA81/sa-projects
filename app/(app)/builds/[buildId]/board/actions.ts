@@ -24,6 +24,24 @@ export async function moveCardAction(
   revalidatePath(`/builds/${buildId}`);
 }
 
+// Form-based move (a reliable fallback for drag-and-drop): set a card's lane,
+// and for a task its department. Never touches the gated status.
+export async function moveCardFormAction(fd: FormData) {
+  const user = await requireUser();
+  const buildId = String(fd.get("buildId") ?? "");
+  const kind = String(fd.get("kind") ?? "") as "deliverable" | "task";
+  const id = String(fd.get("id") ?? "");
+  const lane = String(fd.get("lane") ?? "TODO") as PlanningLane;
+  if (kind === "deliverable") {
+    await moveDeliverableLane(id, lane, user);
+  } else {
+    const dept = String(fd.get("department") ?? "");
+    await moveTask(id, { planningLane: lane, department: (dept as Department) || null }, user);
+  }
+  revalidatePath(`/builds/${buildId}/board`);
+  redirect(`/builds/${buildId}/board`);
+}
+
 export async function createSprintAction(fd: FormData) {
   const user = await requireUser();
   const buildId = String(fd.get("buildId") ?? "");

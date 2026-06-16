@@ -38,6 +38,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           <NavLink href="/activity">Activity</NavLink>
           <NavLink href="/insights">Insights</NavLink>
           {isAdmin ? <NavLink href="/approvals">Approvals</NavLink> : null}
+          {isSuper ? <NavLink href="/admin">Admin</NavLink> : null}
           {isSuper ? <NavLink href="/trash">Trash</NavLink> : null}
         </nav>
       </aside>
