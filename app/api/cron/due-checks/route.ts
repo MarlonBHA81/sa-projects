@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { emitEvent } from "@/lib/n8n/notify";
 import { authorizeCron } from "@/lib/cron-auth";
+import { checkBudgetAlerts } from "@/lib/finance-service";
 import type { DeliverableStatus } from "@prisma/client";
 
 const ACTIVE: DeliverableStatus[] = ["NOT_STARTED", "IN_PROGRESS", "CHANGES_NEEDED", "SUBMITTED"];
@@ -70,9 +71,12 @@ export async function GET(req: Request) {
     });
   }
 
+  const budgetAlerts = await checkBudgetAlerts();
+
   return NextResponse.json({
     overdue: overdue.length,
     dueSoon: dueSoon.length,
     awaitingApproval: stuckInReview.length,
+    budgetAlerts,
   });
 }

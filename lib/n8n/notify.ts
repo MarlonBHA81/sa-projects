@@ -11,6 +11,7 @@ export type AppEventType =
   | "DUE_SOON"
   | "OVERDUE"
   | "AWAITING_APPROVAL"
+  | "BUDGET_ALERT"
   | "GHL_SYNCED"
   | "ENGAGEMENT_COMPLETED"
   | "AI_INSIGHT_HIGH";

@@ -231,6 +231,7 @@ model User {
   department          Department?
   weeklyCapacityHours Int?
   costRatePerHour     Decimal?    @db.Decimal(10, 2)
+  billRatePerHour     Decimal?    @db.Decimal(10, 2)
   billable            Boolean     @default(true)
 
   accounts             Account[]
@@ -309,20 +310,22 @@ model Client {
 }
 
 model Engagement {
-  id           String           @id @default(cuid())
-  client       Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  clientId     String
-  name         String
-  deliveryType DeliveryType
-  status       EngagementStatus @default(ACTIVE)
-  listPrice    Decimal?         @db.Decimal(12, 2)
-  price        Decimal?         @db.Decimal(12, 2)
-  currency     String           @default("ZAR")
-  startDate    DateTime?
-  endDate      DateTime?
-  completedAt  DateTime?
-  deletedAt    DateTime?
-  deletedById  String?
+  id                 String           @id @default(cuid())
+  client             Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId           String
+  name               String
+  deliveryType       DeliveryType
+  status             EngagementStatus @default(ACTIVE)
+  listPrice          Decimal?         @db.Decimal(12, 2)
+  price              Decimal?         @db.Decimal(12, 2)
+  costBudget         Decimal?         @db.Decimal(12, 2)
+  costAlertThreshold Int?
+  currency           String           @default("ZAR")
+  startDate          DateTime?
+  endDate            DateTime?
+  completedAt        DateTime?
+  deletedAt          DateTime?
+  deletedById        String?
 
   funnelBuilds FunnelBuild[]
   payments     Payment[]

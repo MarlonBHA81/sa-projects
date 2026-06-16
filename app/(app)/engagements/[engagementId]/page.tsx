@@ -6,7 +6,7 @@ import { getEngagementFinancials } from "@/lib/finance-service";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { deliveryTypeLabel, engagementStatusLabel } from "@/lib/labels";
 import { formatMoney, formatHours, formatDate } from "@/lib/format";
-import { addBuildAction, addCostAction, generatePnLAction, syncPaymentsAction } from "./actions";
+import { addBuildAction, addCostAction, generatePnLAction, setBudgetAction, syncPaymentsAction } from "./actions";
 import { deleteEntityAction } from "@/app/(app)/manage-actions";
 
 export default async function EngagementPage({
@@ -63,8 +63,9 @@ export default async function EngagementPage({
       {isAdmin && fin ? (
         <Card className="mb-6">
           <h3 className="mb-3 text-sm font-semibold text-zinc-700">Financials</h3>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
             <Figure label="Revenue" value={formatMoney(fin.revenueTotal, currency)} />
+            <Figure label="Billable value" value={formatMoney(fin.billableValue, currency)} />
             <Figure label="Delivery cost" value={formatMoney(fin.deliveryCost, currency)} />
             <Figure label="Ad spend + other" value={formatMoney(fin.adSpend + fin.otherCosts, currency)} />
             <Figure
@@ -73,12 +74,44 @@ export default async function EngagementPage({
               hint={formatMoney(fin.grossProfit, currency)}
             />
           </div>
+
+          {fin.budget > 0 ? (
+            <div className="mt-4">
+              <div className="flex justify-between text-xs text-zinc-500">
+                <span>
+                  Budget burn: {formatMoney(fin.deliveryCost, currency)} of {formatMoney(fin.budget, currency)}
+                </span>
+                <span>{fin.burnPct}%</span>
+              </div>
+              <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-zinc-100">
+                <div
+                  className={`h-full ${fin.burnPct >= 100 ? "bg-red-500" : fin.burnPct >= 70 ? "bg-amber-500" : "bg-green-500"}`}
+                  style={{ width: `${Math.min(100, fin.burnPct)}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
+
           <p className="mt-3 text-xs text-zinc-400">
-            {formatHours(fin.loggedMinutes)} logged.{" "}
+            {formatHours(fin.loggedMinutes)} logged. Billable value is what the logged time is worth at
+            bill rates; delivery cost uses cost rates.{" "}
             {fin.paymentsTotal > 0
               ? "Revenue is actual payments synced from GoHighLevel."
               : "Revenue is the planned engagement price (no payments synced yet)."}
           </p>
+          <form action={setBudgetAction} className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-3">
+            <input type="hidden" name="engagementId" value={engagementId} />
+            <label className="text-xs text-zinc-500">Cost budget</label>
+            <input
+              name="costBudget"
+              type="number"
+              min="0"
+              defaultValue={engagement.costBudget ? Number(engagement.costBudget) : ""}
+              placeholder="defaults to price"
+              className="w-32 rounded-lg border border-zinc-300 px-2 py-1 text-sm"
+            />
+            <button className="text-xs text-zinc-600 hover:text-zinc-900">Save budget</button>
+          </form>
         </Card>
       ) : null}
 

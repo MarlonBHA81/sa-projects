@@ -4,30 +4,51 @@
 import { prisma } from "./db";
 import { AuthError, isApprover, type SessionUser } from "./auth-helpers";
 import { emitEvent } from "./n8n/notify";
-import { computeDeliveryCost, computePnL, marginByDeliveryType, round2, type PnLSummary } from "./finance";
+import {
+  computeBillableValue,
+  computeDeliveryCost,
+  computePnL,
+  marginByDeliveryType,
+  nextBudgetThreshold,
+  round2,
+  type PnLSummary,
+} from "./finance";
 
 export type EngagementFinancials = PnLSummary & {
   currency: string;
   plannedPrice: number;
   paymentsTotal: number;
   loggedMinutes: number;
+  billableValue: number;
+  budget: number;
+  burnPct: number;
 };
 
 export async function getEngagementFinancials(engagementId: string): Promise<EngagementFinancials> {
   const engagement = await prisma.engagement.findUniqueOrThrow({
     where: { id: engagementId },
-    select: { price: true, currency: true },
+    select: { price: true, currency: true, costBudget: true },
   });
 
   const timeEntries = await prisma.timeEntry.findMany({
     where: { deliverable: { funnelBuild: { engagementId } } },
-    select: { durationMinutes: true, user: { select: { costRatePerHour: true } } },
+    select: {
+      durationMinutes: true,
+      user: { select: { costRatePerHour: true, billRatePerHour: true, billable: true } },
+    },
   });
   const loggedMinutes = timeEntries.reduce((a, t) => a + (t.durationMinutes ?? 0), 0);
   const deliveryCost = computeDeliveryCost(
     timeEntries.map((t) => ({
       minutes: t.durationMinutes ?? 0,
       ratePerHour: Number(t.user?.costRatePerHour ?? 0),
+    })),
+  );
+  const billableValue = computeBillableValue(
+    timeEntries.map((t) => ({
+      minutes: t.durationMinutes ?? 0,
+      billRatePerHour: Number(t.user?.billRatePerHour ?? 0),
+      billable: t.user?.billable ?? false,
     })),
   );
 
@@ -52,13 +73,43 @@ export async function getEngagementFinancials(engagementId: string): Promise<Eng
   const otherCosts = Number(otherCostsAgg._sum.amount ?? 0);
 
   const pnl = computePnL({ revenueTotal, deliveryCost, adSpend, otherCosts });
+  const budget = Number(engagement.costBudget ?? engagement.price ?? 0);
+  const burnPct = budget > 0 ? Math.round((deliveryCost / budget) * 100) : 0;
   return {
     ...pnl,
     currency: engagement.currency,
     plannedPrice: round2(plannedPrice),
     paymentsTotal: round2(paymentsTotal),
     loggedMinutes,
+    billableValue,
+    budget: round2(budget),
+    burnPct,
   };
+}
+
+/** Cron helper: alert (once per threshold) when an active engagement's delivery
+ *  cost crosses 70/90/100% of its cost budget. Returns the number of alerts sent. */
+export async function checkBudgetAlerts(): Promise<number> {
+  const engagements = await prisma.engagement.findMany({
+    where: { status: "ACTIVE", deletedAt: null },
+    select: { id: true, name: true, costAlertThreshold: true },
+  });
+  let alerts = 0;
+  for (const e of engagements) {
+    const fin = await getEngagementFinancials(e.id);
+    if (fin.budget <= 0) continue;
+    const threshold = nextBudgetThreshold(fin.burnPct, e.costAlertThreshold);
+    if (threshold == null) continue;
+    await prisma.engagement.update({ where: { id: e.id }, data: { costAlertThreshold: threshold } });
+    void emitEvent({
+      type: "BUDGET_ALERT",
+      summary: `Budget alert: ${e.name} at ${fin.burnPct}% of its cost budget`,
+      engagementId: e.id,
+      meta: { burnPct: fin.burnPct, threshold },
+    });
+    alerts += 1;
+  }
+  return alerts;
 }
 
 export async function addEngagementCost(

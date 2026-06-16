@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { computeDeliveryCost, computePnL, marginByDeliveryType } from "./finance";
+import {
+  computeBillableValue,
+  computeDeliveryCost,
+  computePnL,
+  marginByDeliveryType,
+  nextBudgetThreshold,
+} from "./finance";
 
 describe("computeDeliveryCost", () => {
   it("multiplies logged hours by each person's rate", () => {
@@ -23,6 +29,27 @@ describe("computePnL", () => {
   });
   it("guards against zero revenue", () => {
     expect(computePnL({ revenueTotal: 0, deliveryCost: 100, adSpend: 0, otherCosts: 0 }).marginPct).toBe(0);
+  });
+});
+
+describe("computeBillableValue", () => {
+  it("counts billable people only, at their bill rate", () => {
+    expect(
+      computeBillableValue([
+        { minutes: 120, billRatePerHour: 1500, billable: true }, // 2h * 1500 = 3000
+        { minutes: 60, billRatePerHour: 1000, billable: false }, // non-billable, 0
+      ]),
+    ).toBe(3000);
+  });
+});
+
+describe("nextBudgetThreshold", () => {
+  it("returns the highest newly-crossed threshold or null", () => {
+    expect(nextBudgetThreshold(50, null)).toBeNull();
+    expect(nextBudgetThreshold(72, null)).toBe(70);
+    expect(nextBudgetThreshold(95, 70)).toBe(90);
+    expect(nextBudgetThreshold(120, 90)).toBe(100);
+    expect(nextBudgetThreshold(95, 90)).toBeNull(); // already alerted at 90
   });
 });
 

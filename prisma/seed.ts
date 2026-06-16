@@ -13,16 +13,17 @@ type SeedUser = {
   role: Role;
   department: Department | null;
   costRatePerHour: number;
+  billRatePerHour: number;
   weeklyCapacityHours: number;
 };
 
 const USERS: SeedUser[] = [
-  { email: "marlon@storyadvantage.co", name: "Marlon", role: "SUPER_ADMIN", department: null, costRatePerHour: 1200, weeklyCapacityHours: 20 },
-  { email: "strategy@storyadvantage.co", name: "Purple Ocean Navigator", role: "STRATEGY", department: "STRATEGY", costRatePerHour: 900, weeklyCapacityHours: 30 },
-  { email: "copy@storyadvantage.co", name: "Resonance Engine Builder", role: "COPY", department: "COPY", costRatePerHour: 750, weeklyCapacityHours: 30 },
-  { email: "design@storyadvantage.co", name: "Visual Authority Architect", role: "DESIGN", department: "DESIGN", costRatePerHour: 700, weeklyCapacityHours: 30 },
-  { email: "dev@storyadvantage.co", name: "Conversion Architect", role: "DEV", department: "DEV", costRatePerHour: 800, weeklyCapacityHours: 30 },
-  { email: "sales@storyadvantage.co", name: "Authority Revenue Translator", role: "SALES", department: "SALES", costRatePerHour: 850, weeklyCapacityHours: 25 },
+  { email: "marlon@storyadvantage.co", name: "Marlon", role: "SUPER_ADMIN", department: null, costRatePerHour: 1200, billRatePerHour: 0, weeklyCapacityHours: 20 },
+  { email: "strategy@storyadvantage.co", name: "Purple Ocean Navigator", role: "STRATEGY", department: "STRATEGY", costRatePerHour: 900, billRatePerHour: 2000, weeklyCapacityHours: 30 },
+  { email: "copy@storyadvantage.co", name: "Resonance Engine Builder", role: "COPY", department: "COPY", costRatePerHour: 750, billRatePerHour: 1700, weeklyCapacityHours: 30 },
+  { email: "design@storyadvantage.co", name: "Visual Authority Architect", role: "DESIGN", department: "DESIGN", costRatePerHour: 700, billRatePerHour: 1600, weeklyCapacityHours: 30 },
+  { email: "dev@storyadvantage.co", name: "Conversion Architect", role: "DEV", department: "DEV", costRatePerHour: 800, billRatePerHour: 1800, weeklyCapacityHours: 30 },
+  { email: "sales@storyadvantage.co", name: "Authority Revenue Translator", role: "SALES", department: "SALES", costRatePerHour: 850, billRatePerHour: 1900, weeklyCapacityHours: 25 },
 ];
 
 async function main() {
@@ -38,6 +39,7 @@ async function main() {
         role: u.role,
         department: u.department,
         costRatePerHour: u.costRatePerHour,
+        billRatePerHour: u.billRatePerHour,
         weeklyCapacityHours: u.weeklyCapacityHours,
         passwordHash,
       },
@@ -47,6 +49,7 @@ async function main() {
         role: u.role,
         department: u.department,
         costRatePerHour: u.costRatePerHour,
+        billRatePerHour: u.billRatePerHour,
         weeklyCapacityHours: u.weeklyCapacityHours,
         billable: u.department !== null,
         passwordHash,

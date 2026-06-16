@@ -3,11 +3,37 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser, requireAdmin } from "@/lib/auth-helpers";
+import { prisma } from "@/lib/db";
 import { addEngagementCost, generatePnL } from "@/lib/finance-service";
 import { importPayments } from "@/lib/ghl/sync";
 import { createFunnelBuildFromTemplate } from "@/lib/seed-funnel";
 import { recordActivity } from "@/lib/activity";
 import type { ConversionGoal } from "@prisma/client";
+
+export async function setBudgetAction(fd: FormData) {
+  const user = await requireAdmin();
+  const engagementId = String(fd.get("engagementId") ?? "");
+  const path = `/engagements/${engagementId}`;
+  const raw = String(fd.get("costBudget") ?? "").trim();
+  const n = raw ? Number(raw) : null;
+  await prisma.engagement.update({
+    where: { id: engagementId },
+    data: {
+      costBudget: n != null && Number.isFinite(n) && n > 0 ? String(n) : null,
+      costAlertThreshold: null, // reset so alerts re-evaluate against the new budget
+    },
+  });
+  await recordActivity({
+    type: "ENGAGEMENT_UPDATED",
+    actorId: user.id,
+    engagementId,
+    entityType: "engagement",
+    entityId: engagementId,
+    summary: "Set the cost budget",
+  });
+  revalidatePath(path);
+  redirect(path);
+}
 
 export async function addCostAction(fd: FormData) {
   const user = await requireUser();

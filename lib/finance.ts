@@ -13,6 +13,29 @@ export function computeDeliveryCost(items: TimeCostItem[]): number {
   return round2(total);
 }
 
+export type BillItem = { minutes: number; billRatePerHour: number; billable: boolean };
+
+/** What the logged time could be billed at. Non-billable people contribute zero
+ *  bill value but still cost money (kept in computeDeliveryCost), so margin is honest. */
+export function computeBillableValue(items: BillItem[]): number {
+  const total = items.reduce(
+    (acc, i) => acc + (i.billable ? (i.minutes / 60) * i.billRatePerHour : 0),
+    0,
+  );
+  return round2(total);
+}
+
+const BUDGET_THRESHOLDS = [70, 90, 100];
+
+/** The highest budget-burn threshold crossed that has not already been alerted, else null. */
+export function nextBudgetThreshold(burnPct: number, alreadyAlerted: number | null): number | null {
+  const crossed = BUDGET_THRESHOLDS.filter((t) => burnPct >= t);
+  if (crossed.length === 0) return null;
+  const highest = crossed[crossed.length - 1];
+  if (alreadyAlerted != null && highest <= alreadyAlerted) return null;
+  return highest;
+}
+
 export type PnLInput = {
   revenueTotal: number;
   deliveryCost: number;
