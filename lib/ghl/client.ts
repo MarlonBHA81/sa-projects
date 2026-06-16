@@ -75,6 +75,21 @@ export type GhlInvoice = {
   updatedAt?: string;
 };
 
+export type GhlLocation = { id?: string; _id?: string; name?: string; companyId?: string };
+
+/** Fetch a sub-account (location) by id. Used to import a client. */
+export async function getLocation(locationId: string): Promise<GhlLocation | null> {
+  try {
+    const data = await ghlFetch<{ location?: GhlLocation }>(
+      `/locations/${encodeURIComponent(locationId)}`,
+    );
+    return data.location ?? null;
+  } catch (err) {
+    console.error("[ghl] getLocation failed", err);
+    return null;
+  }
+}
+
 export async function listInvoices(locationId: string, limit = 100): Promise<GhlInvoice[]> {
   // Best-effort: the invoices surface varies by account. Guarded by the caller.
   const data = await ghlFetch<{ invoices?: GhlInvoice[] }>(

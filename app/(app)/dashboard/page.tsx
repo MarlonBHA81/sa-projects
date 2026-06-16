@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireUser, isAdmin } from "@/lib/auth-helpers";
 import { Badge, Card, EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import {
   deliverableStatusClass,
@@ -37,7 +37,13 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <PageHeader title="Dashboard" subtitle="Where every funnel build stands right now." />
+      <PageHeader title="Dashboard" subtitle="Where every funnel build stands right now.">
+        {isAdmin(user) ? (
+          <LinkButton href="/start" variant="primary">
+            Start a project
+          </LinkButton>
+        ) : null}
+      </PageHeader>
 
       {(user.role === "ADMIN" || user.role === "SUPER_ADMIN") && pendingApprovals > 0 ? (
         <div className="mb-6 flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-5 py-3">

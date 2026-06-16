@@ -20,9 +20,12 @@ export default async function EngagementsPage() {
     <div>
       <PageHeader title="Engagements" subtitle="The commercial work, by delivery model.">
         {isAdmin(user) ? (
-          <LinkButton href="/engagements/new" variant="primary">
-            New engagement
-          </LinkButton>
+          <>
+            <LinkButton href="/start" variant="primary">
+              Start a project
+            </LinkButton>
+            <LinkButton href="/engagements/new">New engagement</LinkButton>
+          </>
         ) : null}
       </PageHeader>
       {engagements.length === 0 ? (
