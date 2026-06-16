@@ -167,18 +167,21 @@ function Card({
   deleteTask: FormAction;
 }) {
   const { setNodeRef, listeners, attributes, transform, isDragging } = useDraggable({ id: card.dndId });
-  const style = transform
-    ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 50 }
-    : undefined;
+  const style: React.CSSProperties = {
+    touchAction: "none",
+    ...(transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, zIndex: 50 } : {}),
+  };
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`rounded-lg border border-zinc-200 bg-white p-3 text-sm shadow-sm ${isDragging ? "opacity-60" : ""}`}
+      {...listeners}
+      {...attributes}
+      className={`cursor-grab rounded-lg border border-zinc-200 bg-white p-3 text-sm shadow-sm active:cursor-grabbing ${
+        isDragging ? "opacity-60" : ""
+      }`}
     >
-      <div {...listeners} {...attributes} className="cursor-grab touch-none font-medium text-zinc-900">
-        {card.title}
-      </div>
+      <div className="font-medium text-zinc-900">{card.title}</div>
       <div className="mt-1 flex flex-wrap items-center gap-1">
         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${card.departmentClass}`}>
           {card.departmentLabel}
@@ -191,7 +194,11 @@ function Card({
       {card.blockers.length ? (
         <div className="mt-1 text-xs text-orange-700">blocked by: {card.blockers.join(", ")}</div>
       ) : null}
-      <div className="mt-2 flex flex-wrap items-center gap-2">
+      {/* Controls: stop pointer events from starting a drag so they stay clickable. */}
+      <div
+        className="mt-2 flex flex-wrap items-center gap-2"
+        onPointerDown={(e) => e.stopPropagation()}
+      >
         {card.href ? (
           <Link href={card.href} className="text-xs text-zinc-600 hover:text-zinc-900">
             Open
