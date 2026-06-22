@@ -139,6 +139,50 @@ export function billingTypeLocked(tasks: { billed: boolean }[]): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Finished / billed state transitions (pure)
+// ---------------------------------------------------------------------------
+
+export type ProjectStatusName =
+  | "NOT_STARTED"
+  | "IN_PROGRESS"
+  | "ON_HOLD"
+  | "FINISHED"
+  | "CANCELLED";
+
+/**
+ * Resolve dateFinished on a status change. Stamp `now` when entering FINISHED,
+ * clear when leaving it, otherwise leave unchanged (undefined).
+ */
+export function resolveDateFinished(
+  current: ProjectStatusName,
+  next: ProjectStatusName | undefined,
+  now: Date,
+): Date | null | undefined {
+  if (!next) return undefined;
+  if (next === "FINISHED" && current !== "FINISHED") return now;
+  if (next !== "FINISHED" && current === "FINISHED") return null;
+  return undefined;
+}
+
+/**
+ * Whether a billing-type change is allowed. Blocked once any task is billed
+ * (Perfex locks the billing type). Same type is always a no-op (allowed).
+ */
+export function canChangeBillingType(
+  current: BillingType,
+  next: BillingType,
+  tasks: { billed: boolean }[],
+): boolean {
+  if (current === next) return true;
+  return !billingTypeLocked(tasks);
+}
+
+/** Once billed, a task's rate and billable flag are locked. */
+export function taskFieldsLocked(task: { billed: boolean }): boolean {
+  return task.billed;
+}
+
+// ---------------------------------------------------------------------------
 // Gantt / timeline geometry (pure)
 // ---------------------------------------------------------------------------
 

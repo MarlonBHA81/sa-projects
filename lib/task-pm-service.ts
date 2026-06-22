@@ -8,6 +8,7 @@ import { AuthError, isAdmin, type SessionUser } from "./auth-helpers";
 import { softDelete, notDeleted } from "./soft-delete";
 import { recordProjectActivity } from "./project-service";
 import { recomputeProjectProgress } from "./project-service";
+import { taskFieldsLocked } from "./projects-pm";
 import type { TaskPriority, TaskStatus } from "@prisma/client";
 
 export class TaskPmError extends Error {
@@ -157,7 +158,7 @@ export async function updateProjectTask(
   const task = await loadTask(id);
 
   // Once billed, a task is locked Complete and its rate/billable cannot change.
-  if (task.billed && (fields.hourlyRate !== undefined || fields.billable !== undefined)) {
+  if (taskFieldsLocked(task) && (fields.hourlyRate !== undefined || fields.billable !== undefined)) {
     throw new TaskPmError("This task has been billed and is locked");
   }
 

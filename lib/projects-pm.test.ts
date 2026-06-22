@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   billableAmount,
   billingTypeLocked,
+  canChangeBillingType,
   clampProgress,
   countCompleted,
   ganttBar,
@@ -9,6 +10,8 @@ import {
   loggedMinutes,
   progressFromTasks,
   projectHours,
+  resolveDateFinished,
+  taskFieldsLocked,
   timesheetMinutes,
   type TaskLogged,
 } from "./projects-pm";
@@ -114,6 +117,40 @@ describe("billingTypeLocked", () => {
     expect(billingTypeLocked([{ billed: false }, { billed: false }])).toBe(false);
     expect(billingTypeLocked([{ billed: false }, { billed: true }])).toBe(true);
     expect(billingTypeLocked([])).toBe(false);
+  });
+});
+
+describe("resolveDateFinished", () => {
+  const now = new Date("2026-06-22T12:00:00Z");
+  it("stamps now when entering FINISHED", () => {
+    expect(resolveDateFinished("IN_PROGRESS", "FINISHED", now)).toBe(now);
+  });
+  it("clears when leaving FINISHED", () => {
+    expect(resolveDateFinished("FINISHED", "IN_PROGRESS", now)).toBeNull();
+  });
+  it("leaves unchanged when staying finished or no status change", () => {
+    expect(resolveDateFinished("FINISHED", "FINISHED", now)).toBeUndefined();
+    expect(resolveDateFinished("IN_PROGRESS", undefined, now)).toBeUndefined();
+    expect(resolveDateFinished("NOT_STARTED", "IN_PROGRESS", now)).toBeUndefined();
+  });
+});
+
+describe("canChangeBillingType", () => {
+  it("allows a change when nothing is billed", () => {
+    expect(canChangeBillingType("FIXED_RATE", "PROJECT_HOURS", [{ billed: false }])).toBe(true);
+  });
+  it("blocks a change once a task is billed", () => {
+    expect(canChangeBillingType("FIXED_RATE", "TASK_HOURS", [{ billed: true }])).toBe(false);
+  });
+  it("treats the same type as a no-op even when billed", () => {
+    expect(canChangeBillingType("TASK_HOURS", "TASK_HOURS", [{ billed: true }])).toBe(true);
+  });
+});
+
+describe("taskFieldsLocked", () => {
+  it("locks a billed task", () => {
+    expect(taskFieldsLocked({ billed: true })).toBe(true);
+    expect(taskFieldsLocked({ billed: false })).toBe(false);
   });
 });
 

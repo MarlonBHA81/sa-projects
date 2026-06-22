@@ -10,12 +10,13 @@ import { recordActivity } from "./activity";
 import { softDelete, notDeleted } from "./soft-delete";
 import {
   billableAmount,
-  billingTypeLocked,
+  canChangeBillingType,
   clampProgress,
   countCompleted,
   loggedMinutes,
   progressFromTasks,
   projectHours,
+  resolveDateFinished,
   type BillingType,
   type TaskLogged,
 } from "./projects-pm";
@@ -157,15 +158,14 @@ export async function updateProject(
       where: { projectId: id, ...notDeleted },
       select: { billed: true },
     });
-    if (billingTypeLocked(billedTasks)) {
+    if (!canChangeBillingType(project.billingType, fields.billingType, billedTasks)) {
       throw new ProjectError("Billing type is locked once a task has been billed");
     }
   }
 
   // Marking finished stamps dateFinished; moving away from finished clears it.
   const becomingFinished = fields.status === "FINISHED" && project.status !== "FINISHED";
-  const leavingFinished =
-    fields.status && fields.status !== "FINISHED" && project.status === "FINISHED";
+  const dateFinished = resolveDateFinished(project.status, fields.status, new Date());
 
   await prisma.project.update({
     where: { id },
@@ -184,7 +184,7 @@ export async function updateProject(
       startDate: fields.startDate === undefined ? undefined : fields.startDate,
       deadline: fields.deadline === undefined ? undefined : fields.deadline,
       currency: fields.currency,
-      dateFinished: becomingFinished ? new Date() : leavingFinished ? null : undefined,
+      dateFinished,
     },
   });
 
