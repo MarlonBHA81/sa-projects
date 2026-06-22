@@ -1,6 +1,7 @@
 import { PrismaClient, type Department, type Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { createFunnelBuildFromTemplate } from "../lib/seed-funnel";
+import { seedProjectTemplates } from "../lib/seed-templates";
 
 const prisma = new PrismaClient();
 
@@ -115,6 +116,9 @@ async function main() {
   }
 
   await seedDemoProject(client.id, adminId, byDept);
+
+  // The three project templates (BRS process, sprint, unstructured).
+  await seedProjectTemplates(prisma);
 
   console.log("Seed complete. Sign in with any seeded email and password:", DEV_PASSWORD);
 }
