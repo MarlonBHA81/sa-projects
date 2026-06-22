@@ -46,7 +46,7 @@ export default async function ProjectsPage({
       ) : (
         <div className="flex flex-col gap-3">
           {projects.map((p) => {
-            const done = p.tasks.filter((t) => t.status === "DONE").length;
+            const done = p.tasks.filter((t) => t.status === "COMPLETE").length;
             return (
               <Link key={p.id} href={`/projects/${p.id}`}>
                 <Card className="transition-shadow hover:shadow-md">

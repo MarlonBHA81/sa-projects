@@ -163,6 +163,25 @@ enum ActivityType {
   ITEM_SOFT_DELETED
   ITEM_RESTORED
   ITEM_PURGED
+  PROJECT_UPDATED
+  PROJECT_FINISHED
+  MILESTONE_CREATED
+  MILESTONE_UPDATED
+  MILESTONE_MOVED
+  TASK_ASSIGNED
+  TASK_COMMENTED
+  CHECKLIST_ITEM_ADDED
+  CHECKLIST_ITEM_TOGGLED
+  TIMESHEET_LOGGED
+  TIMESHEET_TIMER_STARTED
+  TIMESHEET_TIMER_STOPPED
+  PROJECT_MEMBER_ADDED
+  PROJECT_MEMBER_REMOVED
+  PROJECT_FILE_ADDED
+  PROJECT_DISCUSSION_CREATED
+  PROJECT_DISCUSSION_COMMENTED
+  PROJECT_NOTE_ADDED
+  TASK_BILLED
 }
 
 enum AiScope {
@@ -204,16 +223,46 @@ enum PlanningLane {
   DONE
 }
 
+// Perfex task status set. Integer-coded in Perfex (1 Not Started, 2 Awaiting
+// Feedback, 3 Testing, 4 In Progress, 5 Complete); we keep the names and derive
+// "complete" from COMPLETE. This is the project task board state, never a BRS gate.
 enum TaskStatus {
-  OPEN
+  NOT_STARTED
   IN_PROGRESS
-  DONE
+  TESTING
+  AWAITING_FEEDBACK
+  COMPLETE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
 
 enum SprintStatus {
   PLANNED
   ACTIVE
   COMPLETED
+}
+
+// Perfex project status set (1 Not Started, 2 In Progress, 3 On Hold,
+// 4 Finished, 5 Cancelled). "Mark finished" stamps dateFinished.
+enum ProjectStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  ON_HOLD
+  FINISHED
+  CANCELLED
+}
+
+// Perfex billing types (1 Fixed Rate, 2 Project Hours, 3 Task Hours). The type
+// is locked once any task on the project has been billed.
+enum ProjectBillingType {
+  FIXED_RATE
+  PROJECT_HOURS
+  TASK_HOURS
 }
 
 // ---------------------------------------------------------------------------
@@ -247,6 +296,12 @@ model User {
   aiUsage              AiUsageLog[]
   ownedProjects        Project[]
   assignedTasks        Task[]
+  projectMemberships   ProjectMember[]
+  taskAssignments      TaskAssignee[]
+  taskFollows          TaskFollower[]
+  taskComments         TaskComment[]
+  timesheets           Timesheet[]
+  projectActivities    ProjectActivity[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -295,16 +350,21 @@ model VerificationToken {
 // ---------------------------------------------------------------------------
 
 model Client {
-  id            String       @id @default(cuid())
-  name          String
-  industry      String?
-  notes         String?
-  ghlLocationId String?
-  engagements   Engagement[]
-  deletedAt     DateTime?
-  deletedById   String?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id               String       @id @default(cuid())
+  name             String
+  industry         String?
+  notes            String?
+  ghlLocationId    String?
+  // GHL contact/opportunity binding so a Perfex-style project resolves its
+  // customer through the GHL-synced client. See lib/ghl/sync.ts.
+  ghlContactId     String?
+  ghlOpportunityId String?
+  engagements      Engagement[]
+  projects         Project[]
+  deletedAt        DateTime?
+  deletedById      String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   @@index([name])
 }
@@ -846,51 +906,311 @@ model Sprint {
   @@index([funnelBuildId])
 }
 
+// ---------------------------------------------------------------------------
+// Perfex-style Project Management. This is the primary "projects" experience.
+// It is a separate layer from the BRS gates: a Task's `status` here is the
+// Perfex task board state, never a gate. A Project binds to one Client.
+// ---------------------------------------------------------------------------
+
 model Project {
-  id          String    @id @default(cuid())
-  name        String
-  description String?
-  owner       User      @relation(fields: [ownerId], references: [id])
-  ownerId     String
+  id                String             @id @default(cuid())
+  name              String
+  description       String?
+  status            ProjectStatus      @default(NOT_STARTED)
+  billingType       ProjectBillingType @default(FIXED_RATE)
+  // The CRM customer link (Perfex `clientid`); synced from GHL.
+  client            Client?            @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId          String?
+  // Creator/owner. Kept from the previous lightweight model.
+  owner             User               @relation(fields: [ownerId], references: [id])
+  ownerId           String
+  // If true, `progress` is derived from task completion; if false it is manual.
+  progressFromTasks Boolean            @default(true)
+  progress          Int                @default(0)
+  // Fixed Rate uses projectCost; Project Hours uses ratePerHour; estimatedHours
+  // is informational.
+  projectCost       Decimal?           @db.Decimal(15, 2)
+  ratePerHour       Decimal?           @db.Decimal(15, 2)
+  estimatedHours    Decimal?           @db.Decimal(15, 2)
+  startDate         DateTime?
+  deadline          DateTime?
+  dateFinished      DateTime?
+  currency          String             @default("ZAR")
+
+  settings    ProjectSettings?
+  members     ProjectMember[]
+  milestones  Milestone[]
   tasks       Task[]
+  files       ProjectFile[]
+  discussions ProjectDiscussion[]
+  notes       ProjectNote[]
+  activities  ProjectActivity[]
+
   deletedAt   DateTime?
   deletedById String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   @@index([ownerId])
+  @@index([clientId])
+  @@index([status])
+}
+
+// Typed 1:1 customer-portal visibility toggles (the Perfex tblproject_settings
+// key set), NOT an EAV table. Admin-only to edit.
+model ProjectSettings {
+  id                      String  @id @default(cuid())
+  project                 Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId               String  @unique
+  viewTasks               Boolean @default(false)
+  createTasks             Boolean @default(false)
+  editTasks               Boolean @default(false)
+  commentOnTasks          Boolean @default(false)
+  viewTaskComments        Boolean @default(false)
+  viewTaskAttachments     Boolean @default(false)
+  viewTaskChecklistItems  Boolean @default(false)
+  uploadOnTasks           Boolean @default(false)
+  viewTaskTotalLoggedTime Boolean @default(false)
+  viewFinanceOverview     Boolean @default(false)
+  uploadFiles             Boolean @default(false)
+  openDiscussions         Boolean @default(false)
+  viewMilestones          Boolean @default(false)
+  viewGantt               Boolean @default(false)
+  viewTimesheets          Boolean @default(false)
+  viewActivityLog         Boolean @default(false)
+  viewTeamMembers         Boolean @default(false)
+  hideTasksOnMainTable    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model Milestone {
+  id                           String    @id @default(cuid())
+  project                      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId                    String
+  name                         String
+  description                  String?
+  descriptionVisibleToCustomer Boolean   @default(false)
+  color                        String?
+  startDate                    DateTime?
+  dueDate                      DateTime?
+  order                        Int       @default(0)
+  hideFromCustomer             Boolean   @default(false)
+  tasks                        Task[]
+  deletedAt                    DateTime?
+  deletedById                  String?
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
+
+  @@index([projectId, order])
 }
 
 model Task {
-  id              String           @id @default(cuid())
+  id              String        @id @default(cuid())
   title           String
   description     String?
-  project         Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project         Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   projectId       String?
-  funnelBuild     FunnelBuild?     @relation(fields: [funnelBuildId], references: [id], onDelete: Cascade)
+  funnelBuild     FunnelBuild?  @relation(fields: [funnelBuildId], references: [id], onDelete: Cascade)
   funnelBuildId   String?
+  milestone       Milestone?    @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  milestoneId     String?
   department      Department?
-  sprint          Sprint?          @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  sprint          Sprint?       @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   sprintId        String?
-  status          TaskStatus       @default(OPEN)
-  planningLane    PlanningLane     @default(TODO)
-  assignee        User?            @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  status          TaskStatus    @default(NOT_STARTED)
+  priority        TaskPriority?
+  planningLane    PlanningLane  @default(TODO)
+  // Legacy single assignee (used by the planning board, sprints, workload).
+  // Perfex multi-assignee lives in TaskAssignee.
+  assignee        User?         @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
   assigneeId      String?
   estimateMinutes Int?
+  startDate       DateTime?
   dueDate         DateTime?
-  order           Int              @default(0)
-  timeEntries     TimeEntry[]
-  dependsOn       TaskDependency[] @relation("TaskDependent")
-  dependedOnBy    TaskDependency[] @relation("TaskPrerequisite")
-  deletedAt       DateTime?
-  deletedById     String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  dateFinished    DateTime?
+  hourlyRate      Decimal       @default(0) @db.Decimal(15, 2)
+  billable        Boolean       @default(false)
+  billed          Boolean       @default(false)
+  visibleToClient Boolean       @default(false)
+  order           Int           @default(0)
+  kanbanOrder     Int           @default(0)
+  milestoneOrder  Int           @default(0)
 
-  @@index([projectId])
+  assignees      TaskAssignee[]
+  followers      TaskFollower[]
+  checklistItems TaskChecklistItem[]
+  taskComments   TaskComment[]
+  timesheets     Timesheet[]
+  timeEntries    TimeEntry[]
+  dependsOn      TaskDependency[]    @relation("TaskDependent")
+  dependedOnBy   TaskDependency[]    @relation("TaskPrerequisite")
+
+  deletedAt   DateTime?
+  deletedById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([projectId, status])
+  @@index([projectId, milestoneId])
   @@index([funnelBuildId])
   @@index([sprintId])
   @@index([assigneeId])
+}
+
+model TaskAssignee {
+  id        String   @id @default(cuid())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, userId])
+  @@index([userId])
+}
+
+// Followers track a task without being assignees; may be staff who are not
+// project members.
+model TaskFollower {
+  id        String   @id @default(cuid())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, userId])
+  @@index([userId])
+}
+
+model TaskChecklistItem {
+  id           String    @id @default(cuid())
+  task         Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId       String
+  description  String
+  finished     Boolean   @default(false)
+  finishedAt   DateTime?
+  finishedById String?
+  order        Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  @@index([taskId, order])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId    String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
+}
+
+// The core time record: a start/stop timer per task per staff member, with a
+// rate snapshot. Billable vs non-billable is a property of the task.
+model Timesheet {
+  id         String    @id @default(cuid())
+  task       Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId     String
+  staff      User      @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  staffId    String
+  startTime  DateTime  @default(now())
+  endTime    DateTime?
+  hourlyRate Decimal   @default(0) @db.Decimal(15, 2)
+  note       String?
+  createdAt  DateTime  @default(now())
+
+  @@index([taskId])
+  @@index([staffId])
+}
+
+model ProjectFile {
+  id                String   @id @default(cuid())
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId         String
+  fileName          String
+  originalFileName  String?
+  subject           String?
+  description       String?
+  fileType          String?
+  url               String?
+  external          String?
+  externalLink      String?
+  visibleToCustomer Boolean  @default(false)
+  uploadedById      String
+  createdAt         DateTime @default(now())
+
+  @@index([projectId])
+}
+
+model ProjectDiscussion {
+  id             String              @id @default(cuid())
+  project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId      String
+  subject        String
+  description    String?
+  showToCustomer Boolean             @default(false)
+  authorId       String
+  comments       DiscussionComment[]
+  lastActivityAt DateTime?
+  createdAt      DateTime            @default(now())
+
+  @@index([projectId, createdAt])
+}
+
+model DiscussionComment {
+  id           String            @id @default(cuid())
+  discussion   ProjectDiscussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  discussionId String
+  authorId     String
+  content      String
+  createdAt    DateTime          @default(now())
+
+  @@index([discussionId, createdAt])
+}
+
+model ProjectNote {
+  id        String   @id @default(cuid())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  content   String
+  authorId  String
+  createdAt DateTime @default(now())
+
+  @@index([projectId, createdAt])
+}
+
+// The per-project audit log shown on the Activity tab. Each entry can be
+// toggled visible/hidden to the customer.
+model ProjectActivity {
+  id                String   @id @default(cuid())
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId         String
+  actor             User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId           String?
+  visibleToCustomer Boolean  @default(false)
+  summary           String
+  meta              Json?
+  createdAt         DateTime @default(now())
+
+  @@index([projectId, createdAt])
 }
 
 model TaskDependency {
