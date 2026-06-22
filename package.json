@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration:setup": "tsx tests/integration/migrate.ts",
     "db:up": "docker compose up -d",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
