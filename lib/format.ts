@@ -8,7 +8,7 @@ export function toNumber(value: Decimalish): number {
 }
 
 export function formatMoney(value: Decimalish, currency = "ZAR"): string {
-  if (value == null) return "—";
+  if (value == null) return "n/a";
   return new Intl.NumberFormat("en-ZA", {
     style: "currency",
     currency,
@@ -17,7 +17,7 @@ export function formatMoney(value: Decimalish, currency = "ZAR"): string {
 }
 
 export function formatMinutes(minutes?: number | null): string {
-  if (!minutes || minutes <= 0) return "—";
+  if (!minutes || minutes <= 0) return "n/a";
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
   if (h === 0) return `${m}m`;
@@ -30,7 +30,7 @@ export function formatHours(minutes?: number | null): string {
 }
 
 export function formatDate(date?: Date | string | null): string {
-  if (!date) return "—";
+  if (!date) return "n/a";
   const d = typeof date === "string" ? new Date(date) : date;
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }

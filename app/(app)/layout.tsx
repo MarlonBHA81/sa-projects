@@ -27,17 +27,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       <aside className="hidden w-56 shrink-0 border-r border-zinc-200 bg-white p-4 sm:block">
         <div className="mb-6 px-3">
           <div className="text-sm font-semibold text-zinc-900">Story Advantage</div>
-          <div className="text-xs text-zinc-500">Funnel builds</div>
+          <div className="text-xs text-zinc-500">Projects</div>
         </div>
         <nav className="flex flex-col gap-1 text-sm">
-          <NavLink href="/dashboard">Dashboard</NavLink>
           <NavLink href="/projects">Projects</NavLink>
           {isAdmin ? <NavLink href="/templates">Templates</NavLink> : null}
           <NavLink href="/engagements">Engagements</NavLink>
           <NavLink href="/workload">Workload</NavLink>
           <NavLink href="/activity">Activity</NavLink>
-          <NavLink href="/insights">Insights</NavLink>
-          {isAdmin ? <NavLink href="/approvals">Approvals</NavLink> : null}
           {isSuper ? <NavLink href="/admin">Admin</NavLink> : null}
           {isSuper ? <NavLink href="/trash">Trash</NavLink> : null}
         </nav>
