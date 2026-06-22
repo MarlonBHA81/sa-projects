@@ -17,6 +17,7 @@ import {
   taskStatusOrder,
 } from "@/lib/labels";
 import { ganttBar, ganttWindow, progressFromTasks, countCompleted } from "@/lib/projects-pm";
+import { nowMs } from "@/lib/now";
 import { TaskStatusBoard, type StatusCard } from "@/components/task-status-board";
 import { MilestoneBoard, type MilestoneCard } from "@/components/milestone-board";
 import type { Prisma, TaskStatus } from "@prisma/client";
@@ -160,7 +161,7 @@ export default async function ProjectDetailPage({
         <MilestonesTab projectId={id} milestones={project.milestones} tasks={tasks} />
       ) : null}
       {tab === "timesheet" ? <TimesheetTab projectId={id} tasks={tasks} userId={user.id} /> : null}
-      {tab === "gantt" ? <GanttTab tasks={tasks} milestones={project.milestones} /> : null}
+      {tab === "gantt" ? <GanttTab tasks={tasks} milestones={project.milestones} now={nowMs()} /> : null}
       {tab === "files" ? <FilesTab projectId={id} /> : null}
       {tab === "discussions" ? <DiscussionsTab projectId={id} /> : null}
       {tab === "notes" ? <NotesTab projectId={id} /> : null}
@@ -643,12 +644,13 @@ async function TimesheetTab({
 function GanttTab({
   tasks,
   milestones,
+  now,
 }: {
   tasks: TaskRow[];
   milestones: { id: string; name: string; color: string | null; startDate: Date | null; dueDate: Date | null }[];
+  now: number;
 }) {
   type Item = { label: string; start: Date | null; end: Date | null; color: string; kind: string };
-  const now = Date.now();
   const items: Item[] = [
     ...milestones.map((m) => ({ label: m.name, start: m.startDate, end: m.dueDate, color: m.color ?? "#6366f1", kind: "milestone" })),
     ...tasks.map((t) => {

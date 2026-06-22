@@ -5,6 +5,7 @@ import { Card, EmptyState, PageHeader } from "@/components/ui";
 import { formatHours } from "@/lib/format";
 import { activityForDepartment, activityForUser, recentActivity } from "@/lib/activity";
 import { departmentLabel } from "@/lib/labels";
+import { daysAgo } from "@/lib/now";
 
 export default async function ActivityPage({
   searchParams,
@@ -26,7 +27,7 @@ export default async function ActivityPage({
     rows = await activityForUser(user.id);
   }
 
-  const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+  const since = daysAgo(7);
   const myTime = await prisma.timeEntry.aggregate({
     where: { userId: user.id, createdAt: { gte: since } },
     _sum: { durationMinutes: true },

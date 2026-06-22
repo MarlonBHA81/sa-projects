@@ -6,7 +6,6 @@
 
 import { prisma } from "./db";
 import { AuthError, isAdmin, type SessionUser } from "./auth-helpers";
-import { recordActivity } from "./activity";
 import { softDelete, notDeleted } from "./soft-delete";
 import {
   billableAmount,

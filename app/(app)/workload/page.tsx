@@ -4,6 +4,7 @@ import { Badge, Card, PageHeader } from "@/components/ui";
 import { departmentLabel } from "@/lib/labels";
 import { formatHours } from "@/lib/format";
 import { summariseWorkload, utilisationPct } from "@/lib/workload";
+import { daysAgo } from "@/lib/now";
 import type { Department } from "@prisma/client";
 
 function barClass(pct: number): string {
@@ -24,7 +25,7 @@ export default async function WorkloadPage() {
     where: { deletedAt: null, funnelBuild: { deletedAt: null } },
     select: { assigneeId: true, status: true, estimateMinutes: true },
   });
-  const since = new Date(Date.now() - 7 * 24 * 3600 * 1000);
+  const since = daysAgo(7);
   const entries = await prisma.timeEntry.findMany({
     where: {
       createdAt: { gte: since },

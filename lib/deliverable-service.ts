@@ -6,13 +6,10 @@ import { prisma } from "./db";
 import {
   canApproveDeliverable,
   canDeliverableStart,
-  canLockOptionSet,
   canSubmitDeliverable,
   computeResyncTargets,
   gruntResult,
   isAllCopyApproved,
-  isStageGateCleared,
-  isStageReadyForReview,
 } from "./gates";
 import type {
   ChecklistItemView,
