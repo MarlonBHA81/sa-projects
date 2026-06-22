@@ -16,7 +16,8 @@ export type SoftDeletable =
   | "sprint"
   | "project"
   | "milestone"
-  | "task";
+  | "task"
+  | "projectTemplate";
 
 type DeletedData = { deletedAt: Date | null; deletedById: string | null };
 
@@ -64,6 +65,11 @@ async function applyDeleted(entity: SoftDeletable, id: string, data: DeletedData
       case "task":
         await tx.task.update({ where: { id }, data });
         break;
+      // The template tree (milestones/tasks/checklist) has no soft-delete
+      // columns; it is owned by the template and cascades on a hard purge.
+      case "projectTemplate":
+        await tx.projectTemplate.update({ where: { id }, data });
+        break;
     }
   });
 }
@@ -93,6 +99,9 @@ async function hardDelete(entity: SoftDeletable, id: string): Promise<void> {
       break;
     case "task":
       await prisma.task.delete({ where: { id } });
+      break;
+    case "projectTemplate":
+      await prisma.projectTemplate.delete({ where: { id } });
       break;
   }
 }

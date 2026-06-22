@@ -182,6 +182,7 @@ enum ActivityType {
   PROJECT_DISCUSSION_COMMENTED
   PROJECT_NOTE_ADDED
   TASK_BILLED
+  PROJECT_CREATED_FROM_TEMPLATE
 }
 
 enum AiScope {
@@ -263,6 +264,16 @@ enum ProjectBillingType {
   FIXED_RATE
   PROJECT_HOURS
   TASK_HOURS
+}
+
+// Project template kinds. PROCESS is a fixed milestone+task tree instantiated
+// whole (the flagship is the BRS process in Perfex terms). SPRINT models each
+// sprint as a milestone carrying sprint metadata so the milestone board drives
+// execution. UNSTRUCTURED is a near-empty template: just the project + settings.
+enum ProjectTemplateKind {
+  PROCESS
+  SPRINT
+  UNSTRUCTURED
 }
 
 // ---------------------------------------------------------------------------
@@ -1222,4 +1233,96 @@ model TaskDependency {
 
   @@unique([dependentId, prerequisiteId])
   @@index([prerequisiteId])
+}
+
+// ---------------------------------------------------------------------------
+// Project templates. A detached milestone -> task -> checklist tree with
+// defaults only (never live BRS gate status), instantiated by
+// createProjectFromTemplate. Templates have no absolute dates: they carry
+// offsets resolved against the project start date at creation time.
+// ---------------------------------------------------------------------------
+
+model ProjectTemplate {
+  id                 String              @id @default(cuid())
+  name               String
+  kind               ProjectTemplateKind @default(UNSTRUCTURED)
+  description        String?
+  // Default billing type applied to the created project (defaults FIXED_RATE).
+  defaultBillingType ProjectBillingType?
+  isActive           Boolean             @default(true)
+  order              Int                 @default(0)
+
+  milestones TemplateMilestone[]
+  tasks      TemplateTask[]
+
+  deletedAt   DateTime?
+  deletedById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([kind, order])
+}
+
+model TemplateMilestone {
+  id          String          @id @default(cuid())
+  template    ProjectTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId  String
+  name        String
+  description String?
+  color       String?
+  order       Int             @default(0)
+  // Resolved against the project start date when instantiated.
+  dueOffsetDays Int?
+  // SPRINT metadata: a milestone-as-sprint carries its window length and index
+  // so the milestone board drives sprint execution.
+  durationDays Int?
+  sprintIndex  Int?
+
+  tasks TemplateTask[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([templateId, order])
+}
+
+model TemplateTask {
+  id                  String             @id @default(cuid())
+  template            ProjectTemplate    @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId          String
+  templateMilestone   TemplateMilestone? @relation(fields: [templateMilestoneId], references: [id], onDelete: SetNull)
+  templateMilestoneId String?
+  title               String
+  description         String?
+  priority            TaskPriority?
+  billable            Boolean            @default(false)
+  hourlyRate          Decimal?           @db.Decimal(15, 2)
+  estimateMinutes     Int?
+  // Both resolved against the project start date when instantiated.
+  startOffsetDays     Int?
+  dueOffsetDays       Int?
+  // The department this task defaults to; resolved to a real user (its
+  // department's member) at creation time. Plain Perfex defaults, never a gate.
+  defaultAssigneeRole Department?
+  order               Int                @default(0)
+
+  checklistItems TemplateChecklistItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([templateId, order])
+  @@index([templateMilestoneId, order])
+}
+
+model TemplateChecklistItem {
+  id             String       @id @default(cuid())
+  templateTask   TemplateTask @relation(fields: [templateTaskId], references: [id], onDelete: Cascade)
+  templateTaskId String
+  description    String
+  order          Int          @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([templateTaskId, order])
 }
