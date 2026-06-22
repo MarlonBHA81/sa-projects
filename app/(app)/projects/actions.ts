@@ -17,6 +17,7 @@ import {
   updateProjectSettings,
   type ProjectSettingsFields,
 } from "@/lib/project-service";
+import { createProjectFromTemplate } from "@/lib/project-template-service";
 import {
   createMilestone,
   deleteMilestone,
@@ -87,27 +88,67 @@ function projectPath(id: string, tab?: string): string {
 
 export async function createProjectAction(fd: FormData) {
   const user = await requireUser();
+  const templateId = opt(fd, "templateId");
   let id = "";
   try {
-    id = await createProject(
+    // When a template is chosen, seed the project from it (milestones, tasks,
+    // checklists, assignees). Otherwise create a bare project. The picker
+    // defaults to the blank (UNSTRUCTURED) template.
+    id = templateId
+      ? await createProjectFromTemplate(
+          {
+            templateId,
+            name: str(fd, "name"),
+            description: opt(fd, "description"),
+            clientId: opt(fd, "clientId"),
+            // A template carries a default billing type; only override when set.
+            billingType: (str(fd, "billingType") as ProjectBillingType) || undefined,
+            startDate: date(fd, "startDate"),
+            deadline: date(fd, "deadline"),
+            memberIds: ids(fd, "memberIds"),
+          },
+          user,
+        )
+      : await createProject(
+          {
+            name: str(fd, "name"),
+            description: opt(fd, "description"),
+            clientId: opt(fd, "clientId"),
+            status: (str(fd, "status") as ProjectStatus) || undefined,
+            billingType: (str(fd, "billingType") as ProjectBillingType) || undefined,
+            progressFromTasks: str(fd, "progressFromTasks") !== "manual",
+            projectCost: num(fd, "projectCost"),
+            ratePerHour: num(fd, "ratePerHour"),
+            estimatedHours: num(fd, "estimatedHours"),
+            startDate: date(fd, "startDate"),
+            deadline: date(fd, "deadline"),
+            memberIds: ids(fd, "memberIds"),
+          },
+          user,
+        );
+  } catch (e) {
+    redirect(`/projects?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not create")}`);
+  }
+  revalidatePath("/projects");
+  redirect(projectPath(id));
+}
+
+// Start a project from a template (the "use this template" action on /templates).
+export async function useTemplateAction(fd: FormData) {
+  const user = await requireUser();
+  const templateId = str(fd, "templateId");
+  let id = "";
+  try {
+    id = await createProjectFromTemplate(
       {
+        templateId,
         name: str(fd, "name"),
-        description: opt(fd, "description"),
-        clientId: opt(fd, "clientId"),
-        status: (str(fd, "status") as ProjectStatus) || undefined,
-        billingType: (str(fd, "billingType") as ProjectBillingType) || undefined,
-        progressFromTasks: str(fd, "progressFromTasks") !== "manual",
-        projectCost: num(fd, "projectCost"),
-        ratePerHour: num(fd, "ratePerHour"),
-        estimatedHours: num(fd, "estimatedHours"),
         startDate: date(fd, "startDate"),
-        deadline: date(fd, "deadline"),
-        memberIds: ids(fd, "memberIds"),
       },
       user,
     );
   } catch (e) {
-    redirect(`/projects?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not create")}`);
+    redirect(`/templates?error=${encodeURIComponent(e instanceof Error ? e.message : "Could not create")}`);
   }
   revalidatePath("/projects");
   redirect(projectPath(id));

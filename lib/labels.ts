@@ -10,6 +10,7 @@ import type {
   AiInsightStatus,
   ProjectStatus,
   ProjectBillingType,
+  ProjectTemplateKind,
   TaskStatus,
   TaskPriority,
 } from "@prisma/client";
@@ -135,6 +136,18 @@ export const billingTypeLabel: Record<ProjectBillingType, string> = {
   FIXED_RATE: "Fixed rate",
   PROJECT_HOURS: "Project hours",
   TASK_HOURS: "Task hours",
+};
+
+export const templateKindLabel: Record<ProjectTemplateKind, string> = {
+  PROCESS: "Process",
+  SPRINT: "Sprint",
+  UNSTRUCTURED: "Blank",
+};
+
+export const templateKindClass: Record<ProjectTemplateKind, string> = {
+  PROCESS: "bg-purple-100 text-purple-700",
+  SPRINT: "bg-indigo-100 text-indigo-700",
+  UNSTRUCTURED: "bg-zinc-100 text-zinc-600",
 };
 
 // Perfex board order: Not Started, In Progress, Testing, Awaiting Feedback, Complete.

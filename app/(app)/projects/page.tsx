@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { requireUser, isAdmin } from "@/lib/auth-helpers";
 import { notDeleted } from "@/lib/soft-delete";
-import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
+import { Badge, Card, EmptyState, LinkButton, PageHeader } from "@/components/ui";
 import { formatDate } from "@/lib/format";
 import {
   billingTypeLabel,
   projectStatusClass,
   projectStatusLabel,
+  templateKindLabel,
 } from "@/lib/labels";
 import { createProjectAction } from "./actions";
 
@@ -16,10 +17,10 @@ export default async function ProjectsPage({
 }: {
   searchParams: Promise<{ error?: string; new?: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const { error, new: showNew } = await searchParams;
 
-  const [projects, clients, members] = await Promise.all([
+  const [projects, clients, members, templates] = await Promise.all([
     prisma.project.findMany({
       where: notDeleted,
       orderBy: { createdAt: "desc" },
@@ -31,13 +32,23 @@ export default async function ProjectsPage({
     }),
     prisma.client.findMany({ where: notDeleted, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.user.findMany({ where: { department: { not: null } }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.projectTemplate.findMany({
+      where: { isActive: true, ...notDeleted },
+      orderBy: [{ order: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, kind: true },
+    }),
   ]);
+
+  // Default the picker to the blank (UNSTRUCTURED) template if one exists.
+  const blankTemplateId = templates.find((t) => t.kind === "UNSTRUCTURED")?.id ?? "";
 
   const field = "rounded-lg border border-zinc-300 px-3 py-1.5 text-sm";
 
   return (
     <div className="max-w-5xl">
-      <PageHeader title="Projects" subtitle="Plan and deliver client work. Tasks, milestones, time and finance in one place." />
+      <PageHeader title="Projects" subtitle="Plan and deliver client work. Tasks, milestones, time and finance in one place.">
+        {isAdmin(user) ? <LinkButton href="/templates">Templates</LinkButton> : null}
+      </PageHeader>
       {error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{error}</div>
       ) : null}
@@ -46,6 +57,19 @@ export default async function ProjectsPage({
         <details open={Boolean(showNew)}>
           <summary className="cursor-pointer text-sm font-medium text-zinc-900">New project</summary>
           <form action={createProjectAction} className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1 sm:col-span-2">
+              <span className="text-xs text-zinc-500">Template</span>
+              <select name="templateId" defaultValue={blankTemplateId} className={field}>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({templateKindLabel[t.kind].toLowerCase()})
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs text-zinc-400">
+                A template seeds milestones and tasks. Blank starts empty.
+              </span>
+            </label>
             <label className="flex flex-col gap-1 sm:col-span-2">
               <span className="text-xs text-zinc-500">Name</span>
               <input name="name" required placeholder="Project name" className={field} />
