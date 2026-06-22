@@ -20,7 +20,7 @@
     "db:create-admin": "tsx scripts/create-admin.ts",
     "db:studio": "prisma studio",
     "postinstall": "prisma generate",
-    "vercel-build": "prisma generate && prisma migrate deploy && next build"
+    "vercel-build": "prisma generate && (prisma migrate resolve --rolled-back 20260622153358_perfex_pm_model || true) && prisma migrate deploy && next build"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
