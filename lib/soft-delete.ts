@@ -15,6 +15,7 @@ export type SoftDeletable =
   | "deliverable"
   | "sprint"
   | "project"
+  | "milestone"
   | "task";
 
 type DeletedData = { deletedAt: Date | null; deletedById: string | null };
@@ -48,7 +49,11 @@ async function applyDeleted(entity: SoftDeletable, id: string, data: DeletedData
         break;
       case "project":
         await tx.task.updateMany({ where: { projectId: id }, data });
+        await tx.milestone.updateMany({ where: { projectId: id }, data });
         await tx.project.update({ where: { id }, data });
+        break;
+      case "milestone":
+        await tx.milestone.update({ where: { id }, data });
         break;
       case "deliverable":
         await tx.deliverable.update({ where: { id }, data });
@@ -82,6 +87,9 @@ async function hardDelete(entity: SoftDeletable, id: string): Promise<void> {
       break;
     case "project":
       await prisma.project.delete({ where: { id } });
+      break;
+    case "milestone":
+      await prisma.milestone.delete({ where: { id } });
       break;
     case "task":
       await prisma.task.delete({ where: { id } });
