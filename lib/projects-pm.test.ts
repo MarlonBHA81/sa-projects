@@ -4,6 +4,8 @@ import {
   billingTypeLocked,
   clampProgress,
   countCompleted,
+  ganttBar,
+  ganttWindow,
   loggedMinutes,
   progressFromTasks,
   projectHours,
@@ -112,5 +114,35 @@ describe("billingTypeLocked", () => {
     expect(billingTypeLocked([{ billed: false }, { billed: false }])).toBe(false);
     expect(billingTypeLocked([{ billed: false }, { billed: true }])).toBe(true);
     expect(billingTypeLocked([])).toBe(false);
+  });
+});
+
+describe("ganttWindow", () => {
+  it("spans the min start to the max end", () => {
+    const w = ganttWindow([
+      { start: new Date("2026-06-01"), end: new Date("2026-06-10") },
+      { start: new Date("2026-06-05"), end: new Date("2026-06-20") },
+    ]);
+    expect(w?.min.toISOString().slice(0, 10)).toBe("2026-06-01");
+    expect(w?.max.toISOString().slice(0, 10)).toBe("2026-06-20");
+  });
+  it("is null with no dates", () => {
+    expect(ganttWindow([{ start: null, end: null }])).toBeNull();
+  });
+});
+
+describe("ganttBar", () => {
+  const window = { min: new Date("2026-06-01T00:00:00Z"), max: new Date("2026-06-11T00:00:00Z") }; // 10 days
+  it("positions a bar as offset + width percentages", () => {
+    const bar = ganttBar(
+      { start: new Date("2026-06-03T00:00:00Z"), end: new Date("2026-06-06T00:00:00Z") },
+      window,
+    );
+    expect(bar.offsetPct).toBeCloseTo(20, 5); // 2/10 days
+    expect(bar.widthPct).toBeCloseTo(30, 5); // 3/10 days
+  });
+  it("clamps width to at least 1% for a zero-length item", () => {
+    const bar = ganttBar({ start: new Date("2026-06-06T00:00:00Z"), end: new Date("2026-06-06T00:00:00Z") }, window);
+    expect(bar.widthPct).toBe(1);
   });
 });

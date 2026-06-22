@@ -137,3 +137,34 @@ export function billableAmount(input: BillingInput): number {
 export function billingTypeLocked(tasks: { billed: boolean }[]): boolean {
   return tasks.some((t) => t.billed);
 }
+
+// ---------------------------------------------------------------------------
+// Gantt / timeline geometry (pure)
+// ---------------------------------------------------------------------------
+
+export type GanttItem = { start: Date | null; end: Date | null };
+export type GanttBar = { offsetPct: number; widthPct: number };
+
+/** The min start and max end across items, used as the timeline window. */
+export function ganttWindow(items: GanttItem[]): { min: Date; max: Date } | null {
+  const starts = items.map((i) => i.start?.getTime()).filter((n): n is number => n != null);
+  const ends = items.map((i) => i.end?.getTime()).filter((n): n is number => n != null);
+  const all = [...starts, ...ends];
+  if (all.length === 0) return null;
+  return { min: new Date(Math.min(...all)), max: new Date(Math.max(...all)) };
+}
+
+/**
+ * Position one bar within a window as left-offset and width percentages.
+ * Missing dates fall back to the window edges; width is clamped to >= 1%.
+ */
+export function ganttBar(item: GanttItem, window: { min: Date; max: Date }): GanttBar {
+  const span = window.max.getTime() - window.min.getTime();
+  if (span <= 0) return { offsetPct: 0, widthPct: 100 };
+  const start = (item.start ?? window.min).getTime();
+  const end = (item.end ?? item.start ?? window.max).getTime();
+  const offsetPct = Math.max(0, Math.min(100, ((start - window.min.getTime()) / span) * 100));
+  const rawWidth = ((Math.max(end, start) - start) / span) * 100;
+  const widthPct = Math.max(1, Math.min(100 - offsetPct, rawWidth));
+  return { offsetPct, widthPct };
+}

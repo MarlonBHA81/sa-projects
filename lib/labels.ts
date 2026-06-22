@@ -8,6 +8,10 @@ import type {
   AiSeverity,
   AiScope,
   AiInsightStatus,
+  ProjectStatus,
+  ProjectBillingType,
+  TaskStatus,
+  TaskPriority,
 } from "@prisma/client";
 
 export const deliverableStatusLabel: Record<DeliverableStatus, string> = {
@@ -105,4 +109,69 @@ export const aiInsightStatusLabel: Record<AiInsightStatus, string> = {
   ACKNOWLEDGED: "Acknowledged",
   APPLIED: "Applied",
   DISMISSED: "Dismissed",
+};
+
+// ---------------------------------------------------------------------------
+// Perfex project management
+// ---------------------------------------------------------------------------
+
+export const projectStatusLabel: Record<ProjectStatus, string> = {
+  NOT_STARTED: "Not started",
+  IN_PROGRESS: "In progress",
+  ON_HOLD: "On hold",
+  FINISHED: "Finished",
+  CANCELLED: "Cancelled",
+};
+
+export const projectStatusClass: Record<ProjectStatus, string> = {
+  NOT_STARTED: "bg-zinc-200 text-zinc-700",
+  IN_PROGRESS: "bg-blue-100 text-blue-700",
+  ON_HOLD: "bg-purple-100 text-purple-700",
+  FINISHED: "bg-green-100 text-green-700",
+  CANCELLED: "bg-zinc-100 text-zinc-500",
+};
+
+export const billingTypeLabel: Record<ProjectBillingType, string> = {
+  FIXED_RATE: "Fixed rate",
+  PROJECT_HOURS: "Project hours",
+  TASK_HOURS: "Task hours",
+};
+
+// Perfex board order: Not Started, In Progress, Testing, Awaiting Feedback, Complete.
+export const taskStatusOrder: TaskStatus[] = [
+  "NOT_STARTED",
+  "IN_PROGRESS",
+  "TESTING",
+  "AWAITING_FEEDBACK",
+  "COMPLETE",
+];
+
+export const taskStatusLabel: Record<TaskStatus, string> = {
+  NOT_STARTED: "Not started",
+  IN_PROGRESS: "In progress",
+  TESTING: "Testing",
+  AWAITING_FEEDBACK: "Awaiting feedback",
+  COMPLETE: "Complete",
+};
+
+export const taskStatusClass: Record<TaskStatus, string> = {
+  NOT_STARTED: "bg-zinc-200 text-zinc-700",
+  IN_PROGRESS: "bg-blue-100 text-blue-700",
+  TESTING: "bg-amber-100 text-amber-800",
+  AWAITING_FEEDBACK: "bg-orange-100 text-orange-800",
+  COMPLETE: "bg-green-100 text-green-700",
+};
+
+export const taskPriorityLabel: Record<TaskPriority, string> = {
+  LOW: "Low",
+  MEDIUM: "Medium",
+  HIGH: "High",
+  URGENT: "Urgent",
+};
+
+export const taskPriorityClass: Record<TaskPriority, string> = {
+  LOW: "bg-zinc-100 text-zinc-600",
+  MEDIUM: "bg-sky-100 text-sky-700",
+  HIGH: "bg-orange-100 text-orange-700",
+  URGENT: "bg-red-100 text-red-700",
 };
