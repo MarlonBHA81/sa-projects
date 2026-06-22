@@ -1,11 +1,15 @@
--- CreateEnum
-CREATE TYPE "TaskPriority" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'URGENT');
+-- CreateEnum (idempotent: these may already exist from a partially-applied run)
+DO $$ BEGIN
+  CREATE TYPE "TaskPriority" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'URGENT');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- CreateEnum
-CREATE TYPE "ProjectStatus" AS ENUM ('NOT_STARTED', 'IN_PROGRESS', 'ON_HOLD', 'FINISHED', 'CANCELLED');
+DO $$ BEGIN
+  CREATE TYPE "ProjectStatus" AS ENUM ('NOT_STARTED', 'IN_PROGRESS', 'ON_HOLD', 'FINISHED', 'CANCELLED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- CreateEnum
-CREATE TYPE "ProjectBillingType" AS ENUM ('FIXED_RATE', 'PROJECT_HOURS', 'TASK_HOURS');
+DO $$ BEGIN
+  CREATE TYPE "ProjectBillingType" AS ENUM ('FIXED_RATE', 'PROJECT_HOURS', 'TASK_HOURS');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- AlterEnum
 -- This migration adds more than one value to an enum.
@@ -13,75 +17,91 @@ CREATE TYPE "ProjectBillingType" AS ENUM ('FIXED_RATE', 'PROJECT_HOURS', 'TASK_H
 -- in a single migration. This can be worked around by creating
 -- multiple migrations, each migration adding only one value to
 -- the enum.
+-- IF NOT EXISTS keeps this safe to re-run after a partial apply.
 
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'PROJECT_UPDATED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'PROJECT_FINISHED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'MILESTONE_CREATED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'MILESTONE_UPDATED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'MILESTONE_MOVED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'TASK_ASSIGNED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'TASK_COMMENTED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'CHECKLIST_ITEM_ADDED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'CHECKLIST_ITEM_TOGGLED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'TIMESHEET_LOGGED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'TIMESHEET_TIMER_STARTED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'TIMESHEET_TIMER_STOPPED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'PROJECT_MEMBER_ADDED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'PROJECT_MEMBER_REMOVED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'PROJECT_FILE_ADDED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'PROJECT_DISCUSSION_CREATED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'PROJECT_DISCUSSION_COMMENTED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'PROJECT_NOTE_ADDED';
+ALTER TYPE "ActivityType" ADD VALUE IF NOT EXISTS 'TASK_BILLED';
 
-ALTER TYPE "ActivityType" ADD VALUE 'PROJECT_UPDATED';
-ALTER TYPE "ActivityType" ADD VALUE 'PROJECT_FINISHED';
-ALTER TYPE "ActivityType" ADD VALUE 'MILESTONE_CREATED';
-ALTER TYPE "ActivityType" ADD VALUE 'MILESTONE_UPDATED';
-ALTER TYPE "ActivityType" ADD VALUE 'MILESTONE_MOVED';
-ALTER TYPE "ActivityType" ADD VALUE 'TASK_ASSIGNED';
-ALTER TYPE "ActivityType" ADD VALUE 'TASK_COMMENTED';
-ALTER TYPE "ActivityType" ADD VALUE 'CHECKLIST_ITEM_ADDED';
-ALTER TYPE "ActivityType" ADD VALUE 'CHECKLIST_ITEM_TOGGLED';
-ALTER TYPE "ActivityType" ADD VALUE 'TIMESHEET_LOGGED';
-ALTER TYPE "ActivityType" ADD VALUE 'TIMESHEET_TIMER_STARTED';
-ALTER TYPE "ActivityType" ADD VALUE 'TIMESHEET_TIMER_STOPPED';
-ALTER TYPE "ActivityType" ADD VALUE 'PROJECT_MEMBER_ADDED';
-ALTER TYPE "ActivityType" ADD VALUE 'PROJECT_MEMBER_REMOVED';
-ALTER TYPE "ActivityType" ADD VALUE 'PROJECT_FILE_ADDED';
-ALTER TYPE "ActivityType" ADD VALUE 'PROJECT_DISCUSSION_CREATED';
-ALTER TYPE "ActivityType" ADD VALUE 'PROJECT_DISCUSSION_COMMENTED';
-ALTER TYPE "ActivityType" ADD VALUE 'PROJECT_NOTE_ADDED';
-ALTER TYPE "ActivityType" ADD VALUE 'TASK_BILLED';
-
--- AlterEnum
-BEGIN;
-CREATE TYPE "TaskStatus_new" AS ENUM ('NOT_STARTED', 'IN_PROGRESS', 'TESTING', 'AWAITING_FEEDBACK', 'COMPLETE');
-ALTER TABLE "public"."Task" ALTER COLUMN "status" DROP DEFAULT;
-ALTER TABLE "Task" ALTER COLUMN "status" TYPE "TaskStatus_new" USING ("status"::text::"TaskStatus_new");
-ALTER TYPE "TaskStatus" RENAME TO "TaskStatus_old";
-ALTER TYPE "TaskStatus_new" RENAME TO "TaskStatus";
-DROP TYPE "public"."TaskStatus_old";
-ALTER TABLE "Task" ALTER COLUMN "status" SET DEFAULT 'NOT_STARTED';
-COMMIT;
+-- AlterEnum: reshape TaskStatus from the legacy set (OPEN, IN_PROGRESS, DONE)
+-- to the Perfex set. Runs only while the legacy 'OPEN' value still exists, so
+-- it is safe to re-run, and it MAPS existing rows (OPEN -> NOT_STARTED,
+-- DONE -> COMPLETE) instead of a bare cast that would fail on real data.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON t.oid = e.enumtypid
+    WHERE t.typname = 'TaskStatus' AND e.enumlabel = 'OPEN'
+  ) THEN
+    CREATE TYPE "TaskStatus_new" AS ENUM ('NOT_STARTED', 'IN_PROGRESS', 'TESTING', 'AWAITING_FEEDBACK', 'COMPLETE');
+    ALTER TABLE "Task" ALTER COLUMN "status" DROP DEFAULT;
+    ALTER TABLE "Task" ALTER COLUMN "status" TYPE "TaskStatus_new" USING (
+      CASE "status"::text
+        WHEN 'OPEN' THEN 'NOT_STARTED'
+        WHEN 'DONE' THEN 'COMPLETE'
+        ELSE "status"::text
+      END::"TaskStatus_new"
+    );
+    ALTER TYPE "TaskStatus" RENAME TO "TaskStatus_old";
+    ALTER TYPE "TaskStatus_new" RENAME TO "TaskStatus";
+    DROP TYPE "TaskStatus_old";
+    ALTER TABLE "Task" ALTER COLUMN "status" SET DEFAULT 'NOT_STARTED';
+  END IF;
+END $$;
 
 -- DropIndex
-DROP INDEX "Task_projectId_idx";
+DROP INDEX IF EXISTS "Task_projectId_idx";
 
 -- AlterTable
-ALTER TABLE "Client" ADD COLUMN     "ghlContactId" TEXT,
-ADD COLUMN     "ghlOpportunityId" TEXT;
+ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "ghlContactId" TEXT,
+ADD COLUMN IF NOT EXISTS "ghlOpportunityId" TEXT;
 
 -- AlterTable
-ALTER TABLE "Project" ADD COLUMN     "billingType" "ProjectBillingType" NOT NULL DEFAULT 'FIXED_RATE',
-ADD COLUMN     "clientId" TEXT,
-ADD COLUMN     "currency" TEXT NOT NULL DEFAULT 'ZAR',
-ADD COLUMN     "dateFinished" TIMESTAMP(3),
-ADD COLUMN     "deadline" TIMESTAMP(3),
-ADD COLUMN     "estimatedHours" DECIMAL(15,2),
-ADD COLUMN     "progress" INTEGER NOT NULL DEFAULT 0,
-ADD COLUMN     "progressFromTasks" BOOLEAN NOT NULL DEFAULT true,
-ADD COLUMN     "projectCost" DECIMAL(15,2),
-ADD COLUMN     "ratePerHour" DECIMAL(15,2),
-ADD COLUMN     "startDate" TIMESTAMP(3),
-ADD COLUMN     "status" "ProjectStatus" NOT NULL DEFAULT 'NOT_STARTED';
+ALTER TABLE "Project" ADD COLUMN IF NOT EXISTS "billingType" "ProjectBillingType" NOT NULL DEFAULT 'FIXED_RATE',
+ADD COLUMN IF NOT EXISTS "clientId" TEXT,
+ADD COLUMN IF NOT EXISTS "currency" TEXT NOT NULL DEFAULT 'ZAR',
+ADD COLUMN IF NOT EXISTS "dateFinished" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "deadline" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "estimatedHours" DECIMAL(15,2),
+ADD COLUMN IF NOT EXISTS "progress" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "progressFromTasks" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN IF NOT EXISTS "projectCost" DECIMAL(15,2),
+ADD COLUMN IF NOT EXISTS "ratePerHour" DECIMAL(15,2),
+ADD COLUMN IF NOT EXISTS "startDate" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "status" "ProjectStatus" NOT NULL DEFAULT 'NOT_STARTED';
 
 -- AlterTable
-ALTER TABLE "Task" ADD COLUMN     "billable" BOOLEAN NOT NULL DEFAULT false,
-ADD COLUMN     "billed" BOOLEAN NOT NULL DEFAULT false,
-ADD COLUMN     "dateFinished" TIMESTAMP(3),
-ADD COLUMN     "hourlyRate" DECIMAL(15,2) NOT NULL DEFAULT 0,
-ADD COLUMN     "kanbanOrder" INTEGER NOT NULL DEFAULT 0,
-ADD COLUMN     "milestoneId" TEXT,
-ADD COLUMN     "milestoneOrder" INTEGER NOT NULL DEFAULT 0,
-ADD COLUMN     "priority" "TaskPriority",
-ADD COLUMN     "startDate" TIMESTAMP(3),
-ADD COLUMN     "visibleToClient" BOOLEAN NOT NULL DEFAULT false,
+ALTER TABLE "Task" ADD COLUMN IF NOT EXISTS "billable" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS "billed" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN IF NOT EXISTS "dateFinished" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "hourlyRate" DECIMAL(15,2) NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "kanbanOrder" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "milestoneId" TEXT,
+ADD COLUMN IF NOT EXISTS "milestoneOrder" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "priority" "TaskPriority",
+ADD COLUMN IF NOT EXISTS "startDate" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "visibleToClient" BOOLEAN NOT NULL DEFAULT false,
 ALTER COLUMN "status" SET DEFAULT 'NOT_STARTED';
 
 -- CreateTable
-CREATE TABLE "ProjectSettings" (
+CREATE TABLE IF NOT EXISTS "ProjectSettings" (
     "id" TEXT NOT NULL,
     "projectId" TEXT NOT NULL,
     "viewTasks" BOOLEAN NOT NULL DEFAULT false,
@@ -109,7 +129,7 @@ CREATE TABLE "ProjectSettings" (
 );
 
 -- CreateTable
-CREATE TABLE "ProjectMember" (
+CREATE TABLE IF NOT EXISTS "ProjectMember" (
     "id" TEXT NOT NULL,
     "projectId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -119,7 +139,7 @@ CREATE TABLE "ProjectMember" (
 );
 
 -- CreateTable
-CREATE TABLE "Milestone" (
+CREATE TABLE IF NOT EXISTS "Milestone" (
     "id" TEXT NOT NULL,
     "projectId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -139,7 +159,7 @@ CREATE TABLE "Milestone" (
 );
 
 -- CreateTable
-CREATE TABLE "TaskAssignee" (
+CREATE TABLE IF NOT EXISTS "TaskAssignee" (
     "id" TEXT NOT NULL,
     "taskId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -149,7 +169,7 @@ CREATE TABLE "TaskAssignee" (
 );
 
 -- CreateTable
-CREATE TABLE "TaskFollower" (
+CREATE TABLE IF NOT EXISTS "TaskFollower" (
     "id" TEXT NOT NULL,
     "taskId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -159,7 +179,7 @@ CREATE TABLE "TaskFollower" (
 );
 
 -- CreateTable
-CREATE TABLE "TaskChecklistItem" (
+CREATE TABLE IF NOT EXISTS "TaskChecklistItem" (
     "id" TEXT NOT NULL,
     "taskId" TEXT NOT NULL,
     "description" TEXT NOT NULL,
@@ -173,7 +193,7 @@ CREATE TABLE "TaskChecklistItem" (
 );
 
 -- CreateTable
-CREATE TABLE "TaskComment" (
+CREATE TABLE IF NOT EXISTS "TaskComment" (
     "id" TEXT NOT NULL,
     "taskId" TEXT NOT NULL,
     "authorId" TEXT NOT NULL,
@@ -184,7 +204,7 @@ CREATE TABLE "TaskComment" (
 );
 
 -- CreateTable
-CREATE TABLE "Timesheet" (
+CREATE TABLE IF NOT EXISTS "Timesheet" (
     "id" TEXT NOT NULL,
     "taskId" TEXT NOT NULL,
     "staffId" TEXT NOT NULL,
@@ -198,7 +218,7 @@ CREATE TABLE "Timesheet" (
 );
 
 -- CreateTable
-CREATE TABLE "ProjectFile" (
+CREATE TABLE IF NOT EXISTS "ProjectFile" (
     "id" TEXT NOT NULL,
     "projectId" TEXT NOT NULL,
     "fileName" TEXT NOT NULL,
@@ -217,7 +237,7 @@ CREATE TABLE "ProjectFile" (
 );
 
 -- CreateTable
-CREATE TABLE "ProjectDiscussion" (
+CREATE TABLE IF NOT EXISTS "ProjectDiscussion" (
     "id" TEXT NOT NULL,
     "projectId" TEXT NOT NULL,
     "subject" TEXT NOT NULL,
@@ -231,7 +251,7 @@ CREATE TABLE "ProjectDiscussion" (
 );
 
 -- CreateTable
-CREATE TABLE "DiscussionComment" (
+CREATE TABLE IF NOT EXISTS "DiscussionComment" (
     "id" TEXT NOT NULL,
     "discussionId" TEXT NOT NULL,
     "authorId" TEXT NOT NULL,
@@ -242,7 +262,7 @@ CREATE TABLE "DiscussionComment" (
 );
 
 -- CreateTable
-CREATE TABLE "ProjectNote" (
+CREATE TABLE IF NOT EXISTS "ProjectNote" (
     "id" TEXT NOT NULL,
     "projectId" TEXT NOT NULL,
     "content" TEXT NOT NULL,
@@ -253,7 +273,7 @@ CREATE TABLE "ProjectNote" (
 );
 
 -- CreateTable
-CREATE TABLE "ProjectActivity" (
+CREATE TABLE IF NOT EXISTS "ProjectActivity" (
     "id" TEXT NOT NULL,
     "projectId" TEXT NOT NULL,
     "actorId" TEXT,
@@ -266,128 +286,148 @@ CREATE TABLE "ProjectActivity" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ProjectSettings_projectId_key" ON "ProjectSettings"("projectId");
+CREATE UNIQUE INDEX IF NOT EXISTS "ProjectSettings_projectId_key" ON "ProjectSettings"("projectId");
 
 -- CreateIndex
-CREATE INDEX "ProjectMember_userId_idx" ON "ProjectMember"("userId");
+CREATE INDEX IF NOT EXISTS "ProjectMember_userId_idx" ON "ProjectMember"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "ProjectMember_projectId_userId_key" ON "ProjectMember"("projectId", "userId");
+CREATE UNIQUE INDEX IF NOT EXISTS "ProjectMember_projectId_userId_key" ON "ProjectMember"("projectId", "userId");
 
 -- CreateIndex
-CREATE INDEX "Milestone_projectId_order_idx" ON "Milestone"("projectId", "order");
+CREATE INDEX IF NOT EXISTS "Milestone_projectId_order_idx" ON "Milestone"("projectId", "order");
 
 -- CreateIndex
-CREATE INDEX "TaskAssignee_userId_idx" ON "TaskAssignee"("userId");
+CREATE INDEX IF NOT EXISTS "TaskAssignee_userId_idx" ON "TaskAssignee"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "TaskAssignee_taskId_userId_key" ON "TaskAssignee"("taskId", "userId");
+CREATE UNIQUE INDEX IF NOT EXISTS "TaskAssignee_taskId_userId_key" ON "TaskAssignee"("taskId", "userId");
 
 -- CreateIndex
-CREATE INDEX "TaskFollower_userId_idx" ON "TaskFollower"("userId");
+CREATE INDEX IF NOT EXISTS "TaskFollower_userId_idx" ON "TaskFollower"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "TaskFollower_taskId_userId_key" ON "TaskFollower"("taskId", "userId");
+CREATE UNIQUE INDEX IF NOT EXISTS "TaskFollower_taskId_userId_key" ON "TaskFollower"("taskId", "userId");
 
 -- CreateIndex
-CREATE INDEX "TaskChecklistItem_taskId_order_idx" ON "TaskChecklistItem"("taskId", "order");
+CREATE INDEX IF NOT EXISTS "TaskChecklistItem_taskId_order_idx" ON "TaskChecklistItem"("taskId", "order");
 
 -- CreateIndex
-CREATE INDEX "TaskComment_taskId_createdAt_idx" ON "TaskComment"("taskId", "createdAt");
+CREATE INDEX IF NOT EXISTS "TaskComment_taskId_createdAt_idx" ON "TaskComment"("taskId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "Timesheet_taskId_idx" ON "Timesheet"("taskId");
+CREATE INDEX IF NOT EXISTS "Timesheet_taskId_idx" ON "Timesheet"("taskId");
 
 -- CreateIndex
-CREATE INDEX "Timesheet_staffId_idx" ON "Timesheet"("staffId");
+CREATE INDEX IF NOT EXISTS "Timesheet_staffId_idx" ON "Timesheet"("staffId");
 
 -- CreateIndex
-CREATE INDEX "ProjectFile_projectId_idx" ON "ProjectFile"("projectId");
+CREATE INDEX IF NOT EXISTS "ProjectFile_projectId_idx" ON "ProjectFile"("projectId");
 
 -- CreateIndex
-CREATE INDEX "ProjectDiscussion_projectId_createdAt_idx" ON "ProjectDiscussion"("projectId", "createdAt");
+CREATE INDEX IF NOT EXISTS "ProjectDiscussion_projectId_createdAt_idx" ON "ProjectDiscussion"("projectId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "DiscussionComment_discussionId_createdAt_idx" ON "DiscussionComment"("discussionId", "createdAt");
+CREATE INDEX IF NOT EXISTS "DiscussionComment_discussionId_createdAt_idx" ON "DiscussionComment"("discussionId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "ProjectNote_projectId_createdAt_idx" ON "ProjectNote"("projectId", "createdAt");
+CREATE INDEX IF NOT EXISTS "ProjectNote_projectId_createdAt_idx" ON "ProjectNote"("projectId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "ProjectActivity_projectId_createdAt_idx" ON "ProjectActivity"("projectId", "createdAt");
+CREATE INDEX IF NOT EXISTS "ProjectActivity_projectId_createdAt_idx" ON "ProjectActivity"("projectId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "Project_clientId_idx" ON "Project"("clientId");
+CREATE INDEX IF NOT EXISTS "Project_clientId_idx" ON "Project"("clientId");
 
 -- CreateIndex
-CREATE INDEX "Project_status_idx" ON "Project"("status");
+CREATE INDEX IF NOT EXISTS "Project_status_idx" ON "Project"("status");
 
 -- CreateIndex
-CREATE INDEX "Task_projectId_status_idx" ON "Task"("projectId", "status");
+CREATE INDEX IF NOT EXISTS "Task_projectId_status_idx" ON "Task"("projectId", "status");
 
 -- CreateIndex
-CREATE INDEX "Task_projectId_milestoneId_idx" ON "Task"("projectId", "milestoneId");
+CREATE INDEX IF NOT EXISTS "Task_projectId_milestoneId_idx" ON "Task"("projectId", "milestoneId");
 
--- AddForeignKey
+-- AddForeignKey (drop-if-exists then add keeps this safe to re-run)
+ALTER TABLE "Project" DROP CONSTRAINT IF EXISTS "Project_clientId_fkey";
 ALTER TABLE "Project" ADD CONSTRAINT "Project_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ProjectSettings" DROP CONSTRAINT IF EXISTS "ProjectSettings_projectId_fkey";
 ALTER TABLE "ProjectSettings" ADD CONSTRAINT "ProjectSettings_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ProjectMember" DROP CONSTRAINT IF EXISTS "ProjectMember_projectId_fkey";
 ALTER TABLE "ProjectMember" ADD CONSTRAINT "ProjectMember_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ProjectMember" DROP CONSTRAINT IF EXISTS "ProjectMember_userId_fkey";
 ALTER TABLE "ProjectMember" ADD CONSTRAINT "ProjectMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Milestone" DROP CONSTRAINT IF EXISTS "Milestone_projectId_fkey";
 ALTER TABLE "Milestone" ADD CONSTRAINT "Milestone_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Task" DROP CONSTRAINT IF EXISTS "Task_milestoneId_fkey";
 ALTER TABLE "Task" ADD CONSTRAINT "Task_milestoneId_fkey" FOREIGN KEY ("milestoneId") REFERENCES "Milestone"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "TaskAssignee" DROP CONSTRAINT IF EXISTS "TaskAssignee_taskId_fkey";
 ALTER TABLE "TaskAssignee" ADD CONSTRAINT "TaskAssignee_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "TaskAssignee" DROP CONSTRAINT IF EXISTS "TaskAssignee_userId_fkey";
 ALTER TABLE "TaskAssignee" ADD CONSTRAINT "TaskAssignee_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "TaskFollower" DROP CONSTRAINT IF EXISTS "TaskFollower_taskId_fkey";
 ALTER TABLE "TaskFollower" ADD CONSTRAINT "TaskFollower_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "TaskFollower" DROP CONSTRAINT IF EXISTS "TaskFollower_userId_fkey";
 ALTER TABLE "TaskFollower" ADD CONSTRAINT "TaskFollower_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "TaskChecklistItem" DROP CONSTRAINT IF EXISTS "TaskChecklistItem_taskId_fkey";
 ALTER TABLE "TaskChecklistItem" ADD CONSTRAINT "TaskChecklistItem_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "TaskComment" DROP CONSTRAINT IF EXISTS "TaskComment_taskId_fkey";
 ALTER TABLE "TaskComment" ADD CONSTRAINT "TaskComment_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "TaskComment" DROP CONSTRAINT IF EXISTS "TaskComment_authorId_fkey";
 ALTER TABLE "TaskComment" ADD CONSTRAINT "TaskComment_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Timesheet" DROP CONSTRAINT IF EXISTS "Timesheet_taskId_fkey";
 ALTER TABLE "Timesheet" ADD CONSTRAINT "Timesheet_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Timesheet" DROP CONSTRAINT IF EXISTS "Timesheet_staffId_fkey";
 ALTER TABLE "Timesheet" ADD CONSTRAINT "Timesheet_staffId_fkey" FOREIGN KEY ("staffId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ProjectFile" DROP CONSTRAINT IF EXISTS "ProjectFile_projectId_fkey";
 ALTER TABLE "ProjectFile" ADD CONSTRAINT "ProjectFile_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ProjectDiscussion" DROP CONSTRAINT IF EXISTS "ProjectDiscussion_projectId_fkey";
 ALTER TABLE "ProjectDiscussion" ADD CONSTRAINT "ProjectDiscussion_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "DiscussionComment" DROP CONSTRAINT IF EXISTS "DiscussionComment_discussionId_fkey";
 ALTER TABLE "DiscussionComment" ADD CONSTRAINT "DiscussionComment_discussionId_fkey" FOREIGN KEY ("discussionId") REFERENCES "ProjectDiscussion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ProjectNote" DROP CONSTRAINT IF EXISTS "ProjectNote_projectId_fkey";
 ALTER TABLE "ProjectNote" ADD CONSTRAINT "ProjectNote_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ProjectActivity" DROP CONSTRAINT IF EXISTS "ProjectActivity_projectId_fkey";
 ALTER TABLE "ProjectActivity" ADD CONSTRAINT "ProjectActivity_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "ProjectActivity" DROP CONSTRAINT IF EXISTS "ProjectActivity_actorId_fkey";
 ALTER TABLE "ProjectActivity" ADD CONSTRAINT "ProjectActivity_actorId_fkey" FOREIGN KEY ("actorId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
